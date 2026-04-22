@@ -1,83 +1,56 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/db/prisma";
 import { requireUser } from "@/lib/auth-server";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
 
-type Context = {
-  params: { id: string };
-};
-
-export async function POST(req: Request, context: Context) {
+// ======================
+// GET - listar arquivos
+// ======================
+export async function GET(request: Request, context: any) {
   try {
-    const user = await requireUser();
+    await requireUser();
 
-    if (user.role === "client") {
-      return NextResponse.json(
-        { message: "Sem permissão para enviar arquivos." },
-        { status: 403 }
-      );
-    }
+    const id = context.params.id;
 
-    
-
-    const content = await prisma.content.findUnique({
-      where: { id },
-    });
-
-    if (!content) {
-      return NextResponse.json(
-        { message: "Conteúdo não encontrado." },
-        { status: 404 }
-      );
-    }
-
-    const formData = await req.formData();
-    const file = formData.get("file") as File | null;
-
-    if (!file) {
-      return NextResponse.json(
-        { message: "Arquivo é obrigatório." },
-        { status: 400 }
-      );
-    }
-
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    const uploadsDir = path.join(process.cwd(), "public", "uploads");
-    await mkdir(uploadsDir, { recursive: true });
-
-    const safeFileName = `${Date.now()}-${file.name.replace(/\s+/g, "-")}`;
-    const filePath = path.join(uploadsDir, safeFileName);
-
-    await writeFile(filePath, buffer);
-
-    const savedFile = await prisma.fileItem.create({
-      data: {
-        name: safeFileName,
-        originalName: file.name,
-        mimeType: file.type || "application/octet-stream",
-        size: file.size,
-        path: `/uploads/${safeFileName}`,
-        clientId: content.clientId,
-        contentId: content.id,
+    const files = await prisma.file.findMany({
+      where: {
+        contentId: id,
+      },
+      orderBy: {
+        createdAt: "desc",
       },
     });
 
-    return NextResponse.json(savedFile, { status: 201 });
+    return NextResponse.json(files);
   } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return NextResponse.json(
-        { message: "Não autenticado." },
-        { status: 401 }
-      );
-    }
-
-    console.error("Erro ao enviar arquivo para conteúdo:", error);
-
     return NextResponse.json(
-      { message: "Erro ao enviar arquivo para conteúdo." },
+      { message: "Erro ao buscar arquivos." },
+      { status: 500 }
+    );
+  }
+}
+
+// ======================
+// POST - criar arquivo
+// ======================
+export async function POST(request: Request, context: any) {
+  try {
+    await requireUser();
+
+    const id = context.params.id;
+    const body = await request.json();
+
+    const file = await prisma.file.create({
+      data: {
+        url: body.url,
+        name: body.name,
+        contentId: id,
+      },
+    });
+
+    return NextResponse.json(file);
+  } catch (error) {
+    return NextResponse.json(
+      { message: "Erro ao criar arquivo." },
       { status: 500 }
     );
   }

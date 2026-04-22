@@ -1,52 +1,76 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/db/prisma";
-import { requireRole } from "@/lib/auth-server";
+import { requireUser } from "@/lib/auth-server";
 
-type Context = {
-  params: { id: string };
-};
-
-export async function PUT(req: Request, context: Context) {
+// ======================
+// GET
+// ======================
+export async function GET(
+  request: Request,
+  context: any
+) {
   try {
-    await requireRole(["admin"]);
+    await requireUser();
 
-    
-    const body = await req.json();
+    const id = context.params.id;
 
-    const name = typeof body.name === "string" ? body.name.trim() : "";
-
-    if (!name) {
-      return NextResponse.json(
-        { message: "Nome do cliente é obrigatório." },
-        { status: 400 }
-      );
-    }
-
-    const updatedClient = await prisma.client.update({
+    const client = await prisma.client.findUnique({
       where: { id },
-      data: {
-        name,
-      },
     });
 
-    return NextResponse.json(updatedClient, { status: 200 });
-  } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+    if (!client) {
       return NextResponse.json(
-        { message: "Não autenticado." },
-        { status: 401 }
+        { message: "Cliente não encontrado." },
+        { status: 404 }
       );
     }
 
-    if (error instanceof Error && error.message === "FORBIDDEN") {
+    return NextResponse.json(client);
+  } catch (error) {
+    return NextResponse.json(
+      { message: "Erro ao buscar cliente." },
+      { status: 500 }
+    );
+  }
+}
+
+// ======================
+// PUT
+// ======================
+export async function PUT(
+  request: Request,
+  context: any
+) {
+  try {
+    const user = await requireUser();
+
+    if (user.role !== "admin") {
       return NextResponse.json(
         { message: "Sem permissão." },
         { status: 403 }
       );
     }
 
-    console.error("Erro ao atualizar cliente:", error);
+    const id = context.params.id;
+    const body = await request.json();
 
+    const name =
+      typeof body.name === "string" ? body.name.trim() : "";
+
+    if (!name) {
+      return NextResponse.json(
+        { message: "Nome é obrigatório." },
+        { status: 400 }
+      );
+    }
+
+    const client = await prisma.client.update({
+      where: { id },
+      data: { name },
+    });
+
+    return NextResponse.json(client);
+  } catch (error) {
     return NextResponse.json(
       { message: "Erro ao atualizar cliente." },
       { status: 500 }
@@ -54,11 +78,24 @@ export async function PUT(req: Request, context: Context) {
   }
 }
 
-export async function DELETE(_req: Request, context: Context) {
+// ======================
+// DELETE
+// ======================
+export async function DELETE(
+  request: Request,
+  context: any
+) {
   try {
-    await requireRole(["admin"]);
+    const user = await requireUser();
 
-    
+    if (user.role !== "admin") {
+      return NextResponse.json(
+        { message: "Sem permissão." },
+        { status: 403 }
+      );
+    }
+
+    const id = context.params.id;
 
     await prisma.client.delete({
       where: { id },
@@ -69,22 +106,6 @@ export async function DELETE(_req: Request, context: Context) {
       { status: 200 }
     );
   } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return NextResponse.json(
-        { message: "Não autenticado." },
-        { status: 401 }
-      );
-    }
-
-    if (error instanceof Error && error.message === "FORBIDDEN") {
-      return NextResponse.json(
-        { message: "Sem permissão." },
-        { status: 403 }
-      );
-    }
-
-    console.error("Erro ao excluir cliente:", error);
-
     return NextResponse.json(
       { message: "Erro ao excluir cliente." },
       { status: 500 }

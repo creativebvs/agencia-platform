@@ -1,35 +1,42 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/db/prisma";
+import { requireUser } from "@/lib/auth-server";
 
-export async function POST(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: Request, context: any) {
   try {
-    const { action } = await req.json();
+    const user = await requireUser();
 
-    if (!["approve", "reject"].includes(action)) {
+    if (user.role !== "client") {
       return NextResponse.json(
-        { message: "Ação inválida" },
+        { message: "Apenas clientes podem aprovar." },
+        { status: 403 }
+      );
+    }
+
+    const id = context.params.id;
+    const body = await request.json();
+
+    const allowedStatuses = ["approved", "changes_requested"];
+
+    if (!allowedStatuses.includes(body.status)) {
+      return NextResponse.json(
+        { message: "Status inválido." },
         { status: 400 }
       );
     }
 
-    const status =
-      action === "approve" ? "approved" : "changes_requested";
-
     const updated = await prisma.content.update({
-      where: { id: params.id },
+      where: { id },
       data: {
-        status,
+        status: body.status,
+        approvalNote: body.approvalNote || null,
       },
     });
 
     return NextResponse.json(updated);
   } catch (error) {
-    console.error(error);
     return NextResponse.json(
-      { message: "Erro ao atualizar conteúdo" },
+      { message: "Erro ao aprovar conteúdo." },
       { status: 500 }
     );
   }

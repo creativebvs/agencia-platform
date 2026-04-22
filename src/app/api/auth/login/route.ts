@@ -40,23 +40,27 @@ export async function POST(req: Request) {
     // 🔥 CRIAR SESSÃO
     const token = randomUUID();
 
-    await prisma.session.create({
-      data: {
-        token,
-        userId: user.id,
-      },
-    });
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7); // 7 dias
+
+await prisma.session.create({
+  data: {
+    token,
+    userId: user.id,
+    expiresAt, // 👈 ESSENCIAL
+  },
+});
 
     const response = NextResponse.json({ success: true });
 
     // 🍪 COOKIE (CORRIGIDO)
     response.cookies.set({
-      name: "session",
-      value: token,
-      httpOnly: true,
-      path: "/",
-      sameSite: "lax",
-    });
+  name: "session",
+  value: token,
+  httpOnly: true,
+  path: "/",
+  sameSite: "lax",
+  expires: expiresAt, // 👈 sincroniza com backend
+});
 
     return response;
   } catch (error) {

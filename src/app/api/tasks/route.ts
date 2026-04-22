@@ -48,19 +48,20 @@ export async function POST(req: Request) {
       );
     }
 
-    const task = await prisma.task.create({
-      data: {
-        title,
-        clientId,
-        description: description || null,
-        priority: priority || "medium",
-        assignee: assignee || null,
-        dueDate,
-      },
-      include: {
-        client: true,
-      },
-    });
+const task = await prisma.task.create({
+  data: {
+    title,
+    clientId,
+    status: "todo", // 👈 ESSENCIAL (CORREÇÃO)
+    description: description || null,
+    priority: priority || "medium",
+    assignee: assignee || null,
+    dueDate,
+  },
+  include: {
+    client: true,
+  },
+});
 
     return NextResponse.json(task, { status: 201 });
   } catch (error) {

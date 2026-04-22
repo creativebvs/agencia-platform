@@ -96,19 +96,18 @@ export async function POST(req: Request) {
       );
     }
 
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        passwordHash: hashPassword(password),
-        role,
-        clientId: role === "client" ? clientId : null,
-      },
-      include: {
-        client: true,
-      },
-    });
-
+const user = await prisma.user.create({
+  data: {
+    name,
+    email,
+    password: await hashPassword(password),
+    role,
+    clientId: role === "client" ? clientId : null,
+  },
+  include: {
+    client: true, // 👈 ESSENCIAL
+  },
+});
     return NextResponse.json(
       {
         id: user.id,

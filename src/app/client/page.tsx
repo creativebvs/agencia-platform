@@ -135,22 +135,24 @@ export default function ClientPage() {
   );
 }
 
-const box = {
+import type { CSSProperties } from "react";
+
+const box: CSSProperties = {
   background: "#111",
   padding: 16,
   borderRadius: 12,
 };
 
-const title = {
+const title: CSSProperties = {
   marginBottom: 12,
 };
 
-const list = {
+const list: CSSProperties = {
   display: "grid",
   gap: 12,
 };
 
-const card = {
+const card: CSSProperties = {
   display: "flex",
   gap: 12,
   background: "#1a1a1a",
@@ -158,7 +160,7 @@ const card = {
   borderRadius: 10,
 };
 
-const textarea = {
+const textarea: CSSProperties = {
   marginTop: 8,
   width: "100%",
   minHeight: 60,
@@ -169,18 +171,18 @@ const textarea = {
   padding: 8,
 };
 
-const meta = {
+const meta: CSSProperties = {
   fontSize: 12,
   color: "#aaa",
 };
 
-const actions = {
+const actions: CSSProperties = {
   display: "flex",
-  flexDirection: "column",
+  flexDirection: "column", // agora aceita
   gap: 8,
 };
 
-const approveBtn = {
+const approveBtn: CSSProperties = {
   background: "#2ecc71",
   border: "none",
   padding: "8px 12px",
@@ -188,7 +190,7 @@ const approveBtn = {
   cursor: "pointer",
 };
 
-const rejectBtn = {
+const rejectBtn: CSSProperties = {
   background: "#e74c3c",
   border: "none",
   padding: "8px 12px",
@@ -196,6 +198,6 @@ const rejectBtn = {
   cursor: "pointer",
 };
 
-const muted = {
+const muted: CSSProperties = {
   color: "#888",
 };

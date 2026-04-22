@@ -13,12 +13,14 @@ export async function GET() {
         return NextResponse.json([], { status: 200 });
       }
 
-      const files = await prisma.fileItem.findMany({
+      const files = await prisma.file.findMany({
         where: {
-          clientId: user.clientId,
+          content: {
+            clientId: user.clientId,
+          },
         },
         include: {
-          client: true,
+          content: true,
         },
         orderBy: {
           createdAt: "desc",
@@ -28,9 +30,14 @@ export async function GET() {
       return NextResponse.json(files, { status: 200 });
     }
 
-    const files = await prisma.fileItem.findMany({
+    // ADMIN / CREATIVE vê todos
+    const files = await prisma.file.findMany({
       include: {
-        client: true,
+        content: {
+          include: {
+            client: true,
+          },
+        },
       },
       orderBy: {
         createdAt: "desc",
@@ -69,11 +76,11 @@ export async function POST(req: Request) {
     const formData = await req.formData();
 
     const file = formData.get("file") as File | null;
-    const clientId = formData.get("clientId")?.toString() || "";
+    const contentId = formData.get("contentId")?.toString() || "";
 
-    if (!file || !clientId) {
+    if (!file || !contentId) {
       return NextResponse.json(
-        { message: "Arquivo e cliente são obrigatórios." },
+        { message: "Arquivo e conteúdo são obrigatórios." },
         { status: 400 }
       );
     }
@@ -89,17 +96,14 @@ export async function POST(req: Request) {
 
     await writeFile(filePath, buffer);
 
-    const savedFile = await prisma.fileItem.create({
+    const savedFile = await prisma.file.create({
       data: {
-        name: safeFileName,
-        originalName: file.name,
-        mimeType: file.type || "application/octet-stream",
-        size: file.size,
-        path: `/uploads/${safeFileName}`,
-        clientId,
+        name: file.name,
+        url: `/uploads/${safeFileName}`,
+        contentId,
       },
       include: {
-        client: true,
+        content: true,
       },
     });
 

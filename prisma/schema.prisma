@@ -13,8 +13,10 @@ model User {
   email     String    @unique
   password  String
   role      Role
+
   clientId  String?
   client    Client?   @relation(fields: [clientId], references: [id])
+
   sessions  Session[]
 
   createdAt DateTime @default(now())
@@ -24,10 +26,12 @@ model User {
 model Client {
   id        String     @id @default(cuid())
   name      String
+
   users     User[]
   contents  Content[]
   tasks     Task[]
   reports   Report[]
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }
@@ -37,14 +41,32 @@ model Content {
   title         String
   type          String
   status        ContentStatus
+
+  caption       String?
+  description   String?
   feedback      String?
+  approvalNote  String?
+
   scheduledDate DateTime?
 
   clientId String
   client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
+  files File[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model File {
+  id        String   @id @default(cuid())
+  name      String
+  url       String
+
+  contentId String
+  content   Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
 }
 
 model Task {
@@ -52,6 +74,10 @@ model Task {
   title     String
   status    TaskStatus
   priority  Priority @default(medium)
+
+  description String?
+  assignee    String?
+  dueDate     DateTime?
 
   clientId String?
   client   Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
@@ -83,7 +109,11 @@ model Session {
   id        String   @id @default(cuid())
   token     String   @unique
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  expiresAt DateTime
+
   createdAt DateTime @default(now())
 }
 

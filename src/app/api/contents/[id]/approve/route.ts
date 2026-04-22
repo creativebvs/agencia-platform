@@ -1,50 +1,42 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/db/prisma";
+import { requireUser } from "@/lib/auth-server";
 
-export async function POST(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: Request, context: any) {
   try {
-    const body = await req.json();
+    const user = await requireUser();
 
-    const action = body.action;
-    const feedback = body.feedback || null;
-
-    if (!["approve", "reject"].includes(action)) {
+    if (user.role !== "client") {
       return NextResponse.json(
-        { message: "Ação inválida" },
+        { message: "Apenas clientes podem aprovar." },
+        { status: 403 }
+      );
+    }
+
+    const id = context.params.id;
+    const body = await request.json();
+
+    const allowedStatuses = ["approved", "changes_requested"];
+
+    if (!allowedStatuses.includes(body.status)) {
+      return NextResponse.json(
+        { message: "Status inválido." },
         { status: 400 }
       );
     }
 
-    const status =
-      action === "approve" ? "approved" : "changes_requested";
-
-    const content = await prisma.content.update({
-      where: { id: params.id },
+    const updated = await prisma.content.update({
+      where: { id },
       data: {
-        status,
-        feedback,
+        status: body.status,
+        approvalNote: body.approvalNote || null,
       },
     });
 
-    // 🔔 NOTIFICAÇÃO
-    await prisma.notification.create({
-      data: {
-        message:
-          action === "approve"
-            ? `Conteúdo "${content.title}" foi APROVADO`
-            : `Conteúdo "${content.title}" precisa de AJUSTES: ${feedback || ""}`,
-      },
-    });
-
-    return NextResponse.json(content);
+    return NextResponse.json(updated);
   } catch (error) {
-    console.error(error);
-
     return NextResponse.json(
-      { message: "Erro interno" },
+      { message: "Erro ao aprovar conteúdo." },
       { status: 500 }
     );
   }

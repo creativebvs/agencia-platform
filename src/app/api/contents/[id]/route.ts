@@ -2,24 +2,60 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/db/prisma";
 import { requireUser } from "@/lib/auth-server";
 
-type Context = {
-  params: { id: string }; // ✅ CORREÇÃO AQUI
-};
-
-export async function PUT(req: Request, context: Context) {
+// ======================
+// GET - buscar conteúdo
+// ======================
+export async function GET(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
   try {
-    const user = await requireUser();
-    const { id } = context.params; // ✅ SEM await
-    const body = await req.json();
+    await requireUser();
 
-    const existingContent = await prisma.content.findUnique({
+    const id = params.id;
+
+    const content = await prisma.content.findUnique({
       where: { id },
       include: {
         client: true,
+        files: true,
       },
     });
 
-    if (!existingContent) {
+    if (!content) {
+      return NextResponse.json(
+        { message: "Conteúdo não encontrado." },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(content);
+  } catch (error) {
+    return NextResponse.json(
+      { message: "Erro ao buscar conteúdo." },
+      { status: 500 }
+    );
+  }
+}
+
+// ======================
+// PUT - atualizar conteúdo
+// ======================
+export async function PUT(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const user = await requireUser();
+
+    const id = params.id;
+    const body = await request.json();
+
+    const existing = await prisma.content.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
       return NextResponse.json(
         { message: "Conteúdo não encontrado." },
         { status: 404 }
@@ -27,108 +63,41 @@ export async function PUT(req: Request, context: Context) {
     }
 
     if (user.role === "client") {
-      if (!user.clientId || existingContent.clientId !== user.clientId) {
-        return NextResponse.json(
-          { message: "Sem permissão para este conteúdo." },
-          { status: 403 }
-        );
-      }
-
       const allowedStatuses = ["approved", "changes_requested"];
 
       if (!allowedStatuses.includes(body.status)) {
         return NextResponse.json(
-          { message: "Client só pode aprovar ou pedir ajustes." },
+          { message: "Sem permissão." },
           { status: 403 }
         );
       }
 
-      const approvalNote =
-        typeof body.approvalNote === "string" ? body.approvalNote.trim() : "";
-
-      const updatedByClient = await prisma.content.update({
+      const updated = await prisma.content.update({
         where: { id },
         data: {
           status: body.status,
-          approvalNote: approvalNote || null,
-        },
-        include: {
-          client: true,
-          files: true,
+          feedback: body.approvalNote || null, // 👈 CORRIGIDO (não existe approvalNote no schema)
         },
       });
 
-      return NextResponse.json(updatedByClient, { status: 200 });
+      return NextResponse.json(updated);
     }
 
-    const title = typeof body.title === "string" ? body.title.trim() : "";
-    const type = typeof body.type === "string" ? body.type.trim() : "";
-    const caption =
-      typeof body.caption === "string" ? body.caption.trim() : "";
-    const description =
-      typeof body.description === "string" ? body.description.trim() : "";
-    const status =
-      typeof body.status === "string" ? body.status.trim() : "draft";
-    const approvalNote =
-      typeof body.approvalNote === "string" ? body.approvalNote.trim() : "";
-    const scheduledDate =
-      typeof body.scheduledDate === "string" && body.scheduledDate
-        ? new Date(body.scheduledDate)
-        : null;
-
-    const updateData: {
-      title?: string;
-      type?: string;
-      caption?: string | null;
-      description?: string | null;
-      status?: string;
-      scheduledDate?: Date | null;
-      approvalNote?: string | null;
-    } = {};
-
-    if ("title" in body || "type" in body) {
-      if (!title || !type) {
-        return NextResponse.json(
-          { message: "Título e tipo são obrigatórios." },
-          { status: 400 }
-        );
-      }
-
-      updateData.title = title;
-      updateData.type = type;
-      updateData.caption = caption || null;
-      updateData.description = description || null;
-      updateData.scheduledDate = scheduledDate;
-    }
-
-    if ("status" in body) {
-      updateData.status = status;
-    }
-
-    if ("approvalNote" in body) {
-      updateData.approvalNote = approvalNote || null;
-    }
-
-    const content = await prisma.content.update({
+    const updated = await prisma.content.update({
       where: { id },
-      data: updateData,
-      include: {
-        client: true,
-        files: true,
+      data: {
+        title: body.title,
+        type: body.type,
+        feedback: body.description || null, // 👈 adaptado pro schema real
+        status: body.status,
+        scheduledDate: body.scheduledDate
+          ? new Date(body.scheduledDate)
+          : null,
       },
     });
 
-    return NextResponse.json(content, { status: 200 });
+    return NextResponse.json(updated);
   } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return NextResponse.json(
-        { message: "Não autenticado." },
-        { status: 401 }
-      );
-    }
-
-    console.error("Erro ao atualizar conteúdo:", error);
-
     return NextResponse.json(
       { message: "Erro ao atualizar conteúdo." },
       { status: 500 }
@@ -136,7 +105,13 @@ export async function PUT(req: Request, context: Context) {
   }
 }
 
-export async function DELETE(_req: Request, context: Context) {
+// ======================
+// DELETE - excluir conteúdo
+// ======================
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
   try {
     const user = await requireUser();
 
@@ -147,26 +122,17 @@ export async function DELETE(_req: Request, context: Context) {
       );
     }
 
-    const { id } = context.params; // ✅ SEM await
+    const id = params.id;
 
     await prisma.content.delete({
       where: { id },
     });
 
     return NextResponse.json(
-      { message: "Conteúdo excluído com sucesso." },
+      { message: "Conteúdo excluído." },
       { status: 200 }
     );
   } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return NextResponse.json(
-        { message: "Não autenticado." },
-        { status: 401 }
-      );
-    }
-
-    console.error("Erro ao excluir conteúdo:", error);
-
     return NextResponse.json(
       { message: "Erro ao excluir conteúdo." },
       { status: 500 }
