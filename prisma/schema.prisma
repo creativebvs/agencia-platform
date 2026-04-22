@@ -1,0 +1,121 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(cuid())
+  name      String
+  email     String    @unique
+  password  String
+  role      Role
+  clientId  String?
+  client    Client?   @relation(fields: [clientId], references: [id])
+  sessions  Session[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Client {
+  id        String     @id @default(cuid())
+  name      String
+  users     User[]
+  contents  Content[]
+  tasks     Task[]
+  reports   Report[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Content {
+  id            String   @id @default(cuid())
+  title         String
+  type          String
+  status        ContentStatus
+  feedback      String?
+  scheduledDate DateTime?
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Task {
+  id        String   @id @default(cuid())
+  title     String
+  status    TaskStatus
+  priority  Priority @default(medium)
+
+  clientId String?
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Report {
+  id               String   @id @default(cuid())
+  title            String
+  periodLabel      String
+
+  impressions      Int      @default(0)
+  reach            Int      @default(0)
+  engagement       Int      @default(0)
+  clicks           Int      @default(0)
+  followersGained  Int      @default(0)
+
+  notes String?
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  message   String
+  createdAt DateTime @default(now())
+}
+
+enum Role {
+  admin
+  creative
+  client
+}
+
+enum ContentStatus {
+  draft
+  in_review
+  waiting_client
+  approved
+  published
+  changes_requested
+}
+
+enum TaskStatus {
+  todo
+  doing
+  done
+}
+
+enum Priority {
+  low
+  medium
+  high
+}
