@@ -3,13 +3,13 @@ import { prisma } from "@/db/prisma";
 import { requireUser } from "@/lib/auth-server";
 
 type Context = {
-  params: Promise<{ id: string }>;
+  params: { id: string }; // ✅ CORREÇÃO AQUI
 };
 
 export async function PUT(req: Request, context: Context) {
   try {
     const user = await requireUser();
-    const { id } = await context.params;
+    const { id } = context.params; // ✅ SEM await
     const body = await req.json();
 
     const existingContent = await prisma.content.findUnique({
@@ -147,7 +147,7 @@ export async function DELETE(_req: Request, context: Context) {
       );
     }
 
-    const { id } = await context.params;
+    const { id } = context.params; // ✅ SEM await
 
     await prisma.content.delete({
       where: { id },
