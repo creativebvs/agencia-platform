@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { cookies } from "next/headers";
 import { getUserBySessionToken, SESSION_COOKIE_NAME } from "@/lib/session";
 

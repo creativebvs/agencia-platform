@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { randomUUID } from "crypto";
 import { prisma } from "@/db/prisma";
 
