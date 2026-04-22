@@ -5,7 +5,7 @@ import path from "path";
 import { requireUser } from "@/lib/auth-server";
 
 type Context = {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 };
 
 export async function DELETE(_req: Request, context: Context) {
@@ -19,7 +19,7 @@ export async function DELETE(_req: Request, context: Context) {
       );
     }
 
-    const { id } = await context.params;
+  
 
     const file = await prisma.fileItem.findUnique({
       where: { id },

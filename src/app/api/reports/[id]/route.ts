@@ -3,7 +3,7 @@ import { prisma } from "@/db/prisma";
 import { requireUser } from "@/lib/auth-server";
 
 type Context = {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 };
 
 export async function PUT(req: Request, context: Context) {
@@ -17,7 +17,7 @@ export async function PUT(req: Request, context: Context) {
       );
     }
 
-    const { id } = await context.params;
+   
     const body = await req.json();
 
     const title = typeof body.title === "string" ? body.title.trim() : "";
@@ -84,8 +84,7 @@ export async function DELETE(_req: Request, context: Context) {
       );
     }
 
-    const { id } = await context.params;
-
+  
     await prisma.report.delete({
       where: { id },
     });

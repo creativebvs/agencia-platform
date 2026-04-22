@@ -5,7 +5,7 @@ import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 
 type Context = {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 };
 
 export async function POST(req: Request, context: Context) {
@@ -19,7 +19,7 @@ export async function POST(req: Request, context: Context) {
       );
     }
 
-    const { id } = await context.params;
+    
 
     const content = await prisma.content.findUnique({
       where: { id },

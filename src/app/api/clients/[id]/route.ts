@@ -3,14 +3,14 @@ import { prisma } from "@/db/prisma";
 import { requireRole } from "@/lib/auth-server";
 
 type Context = {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 };
 
 export async function PUT(req: Request, context: Context) {
   try {
     await requireRole(["admin"]);
 
-    const { id } = await context.params;
+    
     const body = await req.json();
 
     const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -58,7 +58,7 @@ export async function DELETE(_req: Request, context: Context) {
   try {
     await requireRole(["admin"]);
 
-    const { id } = await context.params;
+    
 
     await prisma.client.delete({
       where: { id },

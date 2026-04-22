@@ -2,12 +2,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/db/prisma";
 
 type Context = {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 };
-
 export async function PUT(req: Request, context: Context) {
   try {
-    const { id } = await context.params;
+
     const body = await req.json();
 
     const task = await prisma.task.update({
