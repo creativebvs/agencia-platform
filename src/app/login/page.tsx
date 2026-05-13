@@ -2,11 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const router = useRouter();
-
   const [email, setEmail] = useState("creativebvs@gmail.com");
   const [password, setPassword] = useState("123456");
   const [loading, setLoading] = useState(false);
@@ -30,15 +27,23 @@ export default function LoginPage() {
         }),
       });
 
-      const data = await res.json();
+      let data: any = null;
+
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
 
       if (!res.ok) {
-        alert(data.message || "Erro ao fazer login.");
+        alert(data?.message || "Erro ao fazer login.");
         return;
       }
 
-      router.replace("/dashboard");
-      router.refresh();
+      // Importante:
+      // usamos navegação real para garantir que o cookie de sessão
+      // já seja enviado na próxima requisição do dashboard.
+      window.location.href = "/dashboard";
     } catch (error) {
       console.error("Erro ao fazer login:", error);
       alert("Erro ao fazer login.");
