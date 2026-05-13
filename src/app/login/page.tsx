@@ -1,12 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("creativebvs@gmail.com");
   const [password, setPassword] = useState("123456");
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    async function checkSession() {
+      try {
+        const res = await fetch("/api/auth/me", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        const data = await res.json();
+
+        if (data && data.id) {
+          window.location.replace("/dashboard");
+          return;
+        }
+      } catch (error) {
+        console.error("Erro ao verificar sessão:", error);
+      } finally {
+        setCheckingSession(false);
+      }
+    }
+
+    checkSession();
+  }, []);
 
   async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -40,16 +66,21 @@ export default function LoginPage() {
         return;
       }
 
-      // Importante:
-      // usamos navegação real para garantir que o cookie de sessão
-      // já seja enviado na próxima requisição do dashboard.
-      window.location.href = "/dashboard";
+      window.location.replace("/dashboard");
     } catch (error) {
       console.error("Erro ao fazer login:", error);
       alert("Erro ao fazer login.");
     } finally {
       setLoading(false);
     }
+  }
+
+  if (checkingSession) {
+    return (
+      <main style={pageStyle}>
+        <div style={loadingBoxStyle}>Carregando...</div>
+      </main>
+    );
   }
 
   return (
@@ -94,6 +125,13 @@ const pageStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
+};
+
+const loadingBoxStyle: React.CSSProperties = {
+  background: "#111",
+  border: "1px solid #222",
+  borderRadius: 14,
+  padding: 24,
 };
 
 const cardStyle: React.CSSProperties = {
