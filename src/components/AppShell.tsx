@@ -38,9 +38,13 @@ export default function AppShell({
   children,
 }: AppShellProps) {
   const { user, loading } = useCurrentUser({ redirectToLogin: true });
+
   const router = useRouter();
   const pathname = usePathname();
+
   const [notif, setNotif] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
 
   async function handleLogout() {
     await fetch("/api/auth/logout", {
@@ -51,6 +55,38 @@ export default function AppShell({
     router.replace("/login");
     router.refresh();
   }
+
+  function toggleSidebar() {
+    setSidebarOpen((current) => !current);
+  }
+
+  function closeSidebarOnMobile() {
+    if (isMobile) {
+      setSidebarOpen(false);
+    }
+  }
+
+  useEffect(() => {
+    function handleResize() {
+      const mobile = window.innerWidth < 900;
+
+      setIsMobile(mobile);
+
+      if (mobile) {
+        setSidebarOpen(false);
+      } else {
+        setSidebarOpen(true);
+      }
+    }
+
+    handleResize();
+
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -104,9 +140,49 @@ export default function AppShell({
     item.roles.includes(user.role)
   );
 
+  const shellCurrentStyle: React.CSSProperties = {
+    ...shellStyle,
+    gridTemplateColumns: isMobile
+      ? "1fr"
+      : sidebarOpen
+        ? "260px 1fr"
+        : "0 1fr",
+  };
+
+  const sidebarCurrentStyle: React.CSSProperties = {
+    ...sidebarStyle,
+    ...(isMobile
+      ? {
+          position: "fixed",
+          left: sidebarOpen ? 0 : -280,
+          top: 0,
+          bottom: 0,
+          width: 260,
+          zIndex: 50,
+          transition: "left 0.2s ease",
+          boxShadow: sidebarOpen ? "0 0 80px rgba(0,0,0,0.65)" : "none",
+        }
+      : {
+          width: sidebarOpen ? 260 : 0,
+          padding: sidebarOpen ? 20 : 0,
+          borderRight: sidebarOpen ? "1px solid #1f1f1f" : "none",
+          overflow: "hidden",
+          transition: "width 0.2s ease, padding 0.2s ease",
+        }),
+  };
+
   return (
-    <div style={shellStyle}>
-      <aside style={sidebarStyle}>
+    <div style={shellCurrentStyle}>
+      {isMobile && sidebarOpen && (
+        <button
+          type="button"
+          aria-label="Fechar menu"
+          onClick={() => setSidebarOpen(false)}
+          style={overlayStyle}
+        />
+      )}
+
+      <aside style={sidebarCurrentStyle}>
         <div style={brandBoxStyle}>
           <div style={brandTitleStyle}>Creative Platform</div>
           <div style={brandSubtitleStyle}>Gestão da agência</div>
@@ -120,6 +196,7 @@ export default function AppShell({
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={closeSidebarOnMobile}
                 style={{
                   ...navLinkStyle,
                   ...(active ? navLinkActiveStyle : {}),
@@ -134,9 +211,20 @@ export default function AppShell({
 
       <div style={contentAreaStyle}>
         <header style={headerStyle}>
-          <div>
-            <h1 style={pageTitleStyle}>{title}</h1>
-            {subtitle && <p style={pageSubtitleStyle}>{subtitle}</p>}
+          <div style={headerLeftStyle}>
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              aria-label="Abrir ou fechar menu"
+              style={menuButtonStyle}
+            >
+              ☰
+            </button>
+
+            <div>
+              <h1 style={pageTitleStyle}>{title}</h1>
+              {subtitle && <p style={pageSubtitleStyle}>{subtitle}</p>}
+            </div>
           </div>
 
           <div style={headerRightStyle}>
@@ -180,14 +268,16 @@ export default function AppShell({
 const shellStyle: React.CSSProperties = {
   minHeight: "100vh",
   display: "grid",
-  gridTemplateColumns: "260px 1fr",
   background: "#0b0b0b",
   color: "#fff",
 };
 
 const sidebarStyle: React.CSSProperties = {
+  background: "#0b0b0b",
   borderRight: "1px solid #1f1f1f",
   padding: 20,
+  boxSizing: "border-box",
+  overflow: "hidden",
 };
 
 const navStyle: React.CSSProperties = {
@@ -197,20 +287,24 @@ const navStyle: React.CSSProperties = {
 };
 
 const navLinkStyle: React.CSSProperties = {
-  padding: 10,
-  borderRadius: 8,
+  padding: "11px 12px",
+  borderRadius: 10,
   textDecoration: "none",
   color: "#ccc",
+  whiteSpace: "nowrap",
+  transition: "background 0.15s ease, color 0.15s ease",
 };
 
 const navLinkActiveStyle: React.CSSProperties = {
   background: "#fff",
   color: "#111",
+  fontWeight: "bold",
 };
 
 const contentAreaStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
+  minWidth: 0,
 };
 
 const headerStyle: React.CSSProperties = {
@@ -220,17 +314,40 @@ const headerStyle: React.CSSProperties = {
   justifyContent: "space-between",
   alignItems: "flex-start",
   gap: 16,
+  flexWrap: "wrap",
+};
+
+const headerLeftStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: 14,
+  minWidth: 0,
 };
 
 const headerRightStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 14,
+  flexWrap: "wrap",
+};
+
+const menuButtonStyle: React.CSSProperties = {
+  width: 42,
+  height: 42,
+  borderRadius: 10,
+  border: "1px solid #1f1f1f",
+  background: "#111",
+  color: "#fff",
+  cursor: "pointer",
+  fontSize: 20,
+  lineHeight: 1,
+  flexShrink: 0,
 };
 
 const pageTitleStyle: React.CSSProperties = {
   fontSize: 26,
   margin: 0,
+  lineHeight: 1.1,
 };
 
 const pageSubtitleStyle: React.CSSProperties = {
@@ -256,10 +373,12 @@ const logoutButtonStyle: React.CSSProperties = {
 
 const mainContentStyle: React.CSSProperties = {
   padding: 20,
+  minWidth: 0,
 };
 
 const brandBoxStyle: React.CSSProperties = {
   marginBottom: 20,
+  whiteSpace: "nowrap",
 };
 
 const brandTitleStyle: React.CSSProperties = {
@@ -298,6 +417,7 @@ const loadingBoxStyle: React.CSSProperties = {
   padding: 20,
   borderRadius: 10,
   background: "#111",
+  border: "1px solid #222",
 };
 
 const notificationButtonStyle: React.CSSProperties = {
@@ -331,4 +451,14 @@ const notificationBadgeStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
+};
+
+const overlayStyle: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 40,
+  background: "rgba(0,0,0,0.55)",
+  border: "none",
+  padding: 0,
+  cursor: "pointer",
 };
