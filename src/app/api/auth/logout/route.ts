@@ -1,32 +1,40 @@
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { deleteSession, SESSION_COOKIE_NAME } from "@/lib/session";
+import { cookies } from "next/headers";
+import { prisma } from "@/db/prisma";
 
-export async function POST(req: Request) {
+export async function POST() {
   try {
-    const token = req.headers
-      .get("cookie")
-      ?.split(";")
-      .map((item) => item.trim())
-      .find((item) => item.startsWith(`${SESSION_COOKIE_NAME}=`))
-      ?.split("=")[1] || null;
+    const cookieStore = await cookies();
 
-    await deleteSession(token);
+    const token =
+      cookieStore.get("creative_session")?.value ||
+      cookieStore.get("session")?.value ||
+      null;
+
+    if (token) {
+      await prisma.session.deleteMany({
+        where: { token },
+      });
+    }
 
     const response = NextResponse.json(
-      { message: "Logout realizado com sucesso." },
+      { success: true },
       { status: 200 }
     );
 
-    response.cookies.set({
-      name: SESSION_COOKIE_NAME,
-      value: "",
+    response.cookies.set("creative_session", "", {
       httpOnly: true,
-      sameSite: "lax",
-      secure: false,
-      expires: new Date(0),
       path: "/",
+      maxAge: 0,
+    });
+
+    response.cookies.set("session", "", {
+      httpOnly: true,
+      path: "/",
+      maxAge: 0,
     });
 
     return response;

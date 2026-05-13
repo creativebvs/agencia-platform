@@ -1,75 +1,94 @@
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { verifyPassword } from "@/lib/password";
+import { prisma } from "@/db/prisma";
+import bcrypt from "bcryptjs";
 import { randomUUID } from "crypto";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    const email = body.email;
-    const password = body.password;
+    const email =
+      typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+
+    const password =
+      typeof body.password === "string" ? body.password.trim() : "";
 
     if (!email || !password) {
       return NextResponse.json(
-        { message: "Dados inválidos" },
+        { message: "Email e senha são obrigatórios." },
         { status: 400 }
       );
     }
 
     const user = await prisma.user.findUnique({
       where: { email },
+      include: {
+        client: true,
+      },
     });
 
     if (!user) {
       return NextResponse.json(
-        { message: "Usuário não encontrado" },
+        { message: "Usuário não encontrado." },
         { status: 404 }
       );
     }
 
-    const valid = await verifyPassword(password, user.password);
+    const passwordIsValid = await bcrypt.compare(password, user.password);
 
-    if (!valid) {
+    if (!passwordIsValid) {
       return NextResponse.json(
-        { message: "Senha inválida" },
+        { message: "Senha inválida." },
         { status: 401 }
       );
     }
 
-    // 🔥 CRIAR SESSÃO
     const token = randomUUID();
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
 
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7); // 7 dias
+    await prisma.session.create({
+      data: {
+        token,
+        userId: user.id,
+        expiresAt,
+      },
+    });
 
-await prisma.session.create({
-  data: {
-    token,
-    userId: user.id,
-    expiresAt, // 👈 ESSENCIAL
-  },
-});
+    const response = NextResponse.json(
+      {
+        success: true,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          clientId: user.clientId,
+          client: user.client,
+        },
+      },
+      { status: 200 }
+    );
 
-    const response = NextResponse.json({ success: true });
+    const cookieConfig = {
+      httpOnly: true,
+      path: "/",
+      sameSite: "lax" as const,
+      secure: process.env.NODE_ENV === "production",
+      expires: expiresAt,
+    };
 
-    // 🍪 COOKIE (CORRIGIDO)
-    response.cookies.set({
-  name: "session",
-  value: token,
-  httpOnly: true,
-  path: "/",
-  sameSite: "lax",
-  expires: expiresAt, // 👈 sincroniza com backend
-});
+    response.cookies.set("creative_session", token, cookieConfig);
+    response.cookies.set("session", token, cookieConfig);
 
     return response;
   } catch (error) {
-    console.error(error);
+    console.error("Erro ao fazer login:", error);
 
     return NextResponse.json(
-      { message: "Erro ao fazer login" },
+      { message: "Erro ao fazer login." },
       { status: 500 }
     );
   }
