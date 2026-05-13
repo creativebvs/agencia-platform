@@ -22,15 +22,8 @@ export async function GET() {
       where: { token },
       include: {
         user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-            clientId: true,
+          include: {
             client: true,
-            createdAt: true,
-            updatedAt: true,
           },
         },
       },
@@ -48,7 +41,17 @@ export async function GET() {
       return NextResponse.json(null, { status: 200 });
     }
 
-    return NextResponse.json(session.user, { status: 200 });
+    return NextResponse.json(
+      {
+        id: session.user.id,
+        name: session.user.name,
+        email: session.user.email,
+        role: session.user.role,
+        clientId: session.user.clientId,
+        client: session.user.client,
+      },
+      { status: 200 }
+    );
   } catch (error) {
     console.error("Erro ao buscar usuário atual:", error);
     return NextResponse.json(null, { status: 200 });

@@ -72,16 +72,16 @@ export async function POST(req: Request) {
       { status: 200 }
     );
 
-    const cookieConfig = {
+    const cookieOptions = {
       httpOnly: true,
       path: "/",
       sameSite: "lax" as const,
-      secure: process.env.NODE_ENV === "production",
+      secure: true,
       expires: expiresAt,
     };
 
-    response.cookies.set("creative_session", token, cookieConfig);
-    response.cookies.set("session", token, cookieConfig);
+    response.cookies.set("creative_session", token, cookieOptions);
+    response.cookies.set("session", token, cookieOptions);
 
     return response;
   } catch (error) {

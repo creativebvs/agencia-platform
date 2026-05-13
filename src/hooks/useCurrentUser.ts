@@ -3,59 +3,70 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+type Role = "admin" | "creative" | "client";
+
+type Client = {
+  id: string;
+  name: string;
+};
+
 type CurrentUser = {
   id: string;
   name: string;
   email: string;
-  role: "admin" | "creative" | "client";
-  client?: {
-    id: string;
-    name: string;
-  } | null;
+  role: Role;
+  clientId?: string | null;
+  client?: Client | null;
 };
 
-export function useCurrentUser(options?: { redirectToLogin?: boolean }) {
-  const [user, setUser] = useState<CurrentUser | null>(null);
-  const [loading, setLoading] = useState(true);
+type UseCurrentUserOptions = {
+  redirectToLogin?: boolean;
+};
+
+export function useCurrentUser(options: UseCurrentUserOptions = {}) {
+  const { redirectToLogin = false } = options;
+
   const router = useRouter();
 
+  const [user, setUser] = useState<CurrentUser | null>(null);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    let mounted = true;
+    let active = true;
 
     async function loadUser() {
       try {
-        const response = await fetch("/api/auth/me", {
+        const res = await fetch("/api/auth/me", {
+          method: "GET",
+          credentials: "include",
           cache: "no-store",
         });
 
-        if (!response.ok) {
-          if (options?.redirectToLogin) {
+        const data = await res.json();
+
+        if (!active) return;
+
+        if (data && data.id) {
+          setUser(data);
+        } else {
+          setUser(null);
+
+          if (redirectToLogin) {
             router.replace("/login");
           }
-
-          if (mounted) {
-            setUser(null);
-            setLoading(false);
-          }
-
-          return;
-        }
-
-        const data = await response.json();
-
-        if (mounted) {
-          setUser(data);
-          setLoading(false);
         }
       } catch (error) {
-        console.error("Erro ao carregar usuário:", error);
+        console.error("Erro ao carregar usuário atual:", error);
 
-        if (options?.redirectToLogin) {
+        if (!active) return;
+
+        setUser(null);
+
+        if (redirectToLogin) {
           router.replace("/login");
         }
-
-        if (mounted) {
-          setUser(null);
+      } finally {
+        if (active) {
           setLoading(false);
         }
       }
@@ -64,9 +75,12 @@ export function useCurrentUser(options?: { redirectToLogin?: boolean }) {
     loadUser();
 
     return () => {
-      mounted = false;
+      active = false;
     };
-  }, [options?.redirectToLogin, router]);
+  }, [redirectToLogin, router]);
 
-  return { user, loading };
+  return {
+    user,
+    loading,
+  };
 }
