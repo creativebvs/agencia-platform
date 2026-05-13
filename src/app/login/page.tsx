@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("creativebvs@gmail.com");
-  const [password, setPassword] = useState("123456");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
 
@@ -88,6 +87,7 @@ export default function LoginPage() {
       <section style={wrapperStyle}>
         <div style={brandStyle}>
           <div style={logoStyle}>C</div>
+
           <div>
             <h1 style={brandTitleStyle}>Creative Platform</h1>
             <p style={brandSubtitleStyle}>
@@ -105,11 +105,12 @@ export default function LoginPage() {
             Email
             <input
               type="email"
-              placeholder="seuemail@exemplo.com"
+              placeholder="Digite seu e-mail"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               style={inputStyle}
               autoComplete="email"
+              required
             />
           </label>
 
@@ -122,16 +123,13 @@ export default function LoginPage() {
               onChange={(event) => setPassword(event.target.value)}
               style={inputStyle}
               autoComplete="current-password"
+              required
             />
           </label>
 
           <button type="submit" disabled={loading} style={buttonStyle}>
             {loading ? "Entrando..." : "Entrar"}
           </button>
-
-          <Link href="/register" style={linkStyle}>
-            Criar usuário
-          </Link>
         </form>
       </section>
     </main>
@@ -259,11 +257,4 @@ const buttonStyle: React.CSSProperties = {
   cursor: "pointer",
   fontSize: 16,
   marginTop: 4,
-};
-
-const linkStyle: React.CSSProperties = {
-  color: "#fff",
-  fontSize: 14,
-  marginTop: 4,
-  textAlign: "center",
 };
