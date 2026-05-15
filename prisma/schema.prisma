@@ -59,6 +59,7 @@ model Content {
   client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   files File[]
+  tasks Task[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -87,6 +88,9 @@ model Task {
 
   clientId String?
   client   Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  contentId String?
+  content   Content? @relation(fields: [contentId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

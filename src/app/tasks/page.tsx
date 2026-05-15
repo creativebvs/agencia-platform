@@ -9,6 +9,15 @@ type Client = {
   name: string;
 };
 
+type Content = {
+  id: string;
+  title: string;
+  type: string;
+  status: string;
+  clientId: string;
+  client?: Client | null;
+};
+
 type Task = {
   id: string;
   title: string;
@@ -17,42 +26,95 @@ type Task = {
   priority?: string | null;
   dueDate?: string | null;
   assignee?: string | null;
-  client: Client;
+  client?: Client | null;
+  content?: Content | null;
+  clientId?: string | null;
+  contentId?: string | null;
+};
+
+type TaskForm = {
+  title: string;
+  clientId: string;
+  contentId: string;
+  description: string;
+  priority: string;
+  dueDate: string;
+  assignee: string;
 };
 
 const columns = ["todo", "doing", "done"] as const;
 
+const initialForm: TaskForm = {
+  title: "",
+  clientId: "",
+  contentId: "",
+  description: "",
+  priority: "medium",
+  dueDate: "",
+  assignee: "",
+};
+
 export default function TasksPage() {
-  const { user, loading: userLoading } = useCurrentUser({ redirectToLogin: true });
+  const { user, loading: userLoading } = useCurrentUser({
+    redirectToLogin: true,
+  });
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [contents, setContents] = useState<Content[]>([]);
+
   const [submitting, setSubmitting] = useState(false);
   const [movingTaskId, setMovingTaskId] = useState<string | null>(null);
+  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [form, setForm] = useState({
-    title: "",
-    clientId: "",
-    description: "",
-    priority: "medium",
-    dueDate: "",
-    assignee: "",
-  });
+  const [form, setForm] = useState<TaskForm>(initialForm);
 
   async function loadData() {
     try {
-      const tasksRes = await fetch("/api/tasks", { cache: "no-store" });
-      const tasksData = await tasksRes.json();
+      setLoading(true);
 
-      const clientsRes = await fetch("/api/clients", { cache: "no-store" });
-      const clientsData = await clientsRes.json();
+      const [tasksRes, clientsRes, contentsRes] = await Promise.all([
+        fetch("/api/tasks", {
+          credentials: "include",
+          cache: "no-store",
+        }),
+        fetch("/api/clients", {
+          credentials: "include",
+          cache: "no-store",
+        }),
+        fetch("/api/contents", {
+          credentials: "include",
+          cache: "no-store",
+        }),
+      ]);
+
+      const [tasksData, clientsData, contentsData] = await Promise.all([
+        tasksRes.json(),
+        clientsRes.json(),
+        contentsRes.json(),
+      ]);
+
+      if (!tasksRes.ok) {
+        throw new Error(tasksData?.message || "Erro ao carregar tarefas.");
+      }
+
+      if (!clientsRes.ok) {
+        throw new Error(clientsData?.message || "Erro ao carregar clientes.");
+      }
+
+      if (!contentsRes.ok) {
+        throw new Error(
+          contentsData?.message || "Erro ao carregar conteúdos."
+        );
+      }
 
       setTasks(Array.isArray(tasksData) ? tasksData : []);
       setClients(Array.isArray(clientsData) ? clientsData : []);
+      setContents(Array.isArray(contentsData) ? contentsData : []);
     } catch (error) {
       console.error(error);
-      alert("Erro ao carregar dados.");
+      alert(error instanceof Error ? error.message : "Erro ao carregar dados.");
     } finally {
       setLoading(false);
     }
@@ -64,8 +126,27 @@ export default function TasksPage() {
     }
   }, [userLoading, user]);
 
-  async function createTask(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  const availableContents = useMemo(() => {
+    if (!form.clientId) return [];
+
+    return contents.filter((content) => {
+      const contentClientId = content.clientId || content.client?.id;
+      return contentClientId === form.clientId;
+    });
+  }, [contents, form.clientId]);
+
+  const visibleTasks = useMemo(() => {
+    if (!user) return [];
+
+    if (user.role === "client" && user.client?.id) {
+      return tasks.filter((task) => task.client?.id === user.client?.id);
+    }
+
+    return tasks;
+  }, [tasks, user]);
+
+  async function createTask(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
     if (!form.title.trim() || !form.clientId) {
       alert("Preencha o título e selecione um cliente.");
@@ -80,6 +161,7 @@ export default function TasksPage() {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify(form),
       });
 
@@ -89,19 +171,11 @@ export default function TasksPage() {
         throw new Error(data?.message || "Erro ao criar tarefa.");
       }
 
-      setForm({
-        title: "",
-        clientId: "",
-        description: "",
-        priority: "medium",
-        dueDate: "",
-        assignee: "",
-      });
-
+      setForm(initialForm);
       await loadData();
     } catch (error) {
       console.error(error);
-      alert("Erro ao criar tarefa.");
+      alert(error instanceof Error ? error.message : "Erro ao criar tarefa.");
     } finally {
       setSubmitting(false);
     }
@@ -116,7 +190,10 @@ export default function TasksPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ status: newStatus }),
+        credentials: "include",
+        body: JSON.stringify({
+          status: newStatus,
+        }),
       });
 
       const data = await response.json();
@@ -128,21 +205,58 @@ export default function TasksPage() {
       await loadData();
     } catch (error) {
       console.error(error);
-      alert("Erro ao mover tarefa.");
+      alert(error instanceof Error ? error.message : "Erro ao mover tarefa.");
     } finally {
       setMovingTaskId(null);
     }
   }
 
-  const visibleTasks = useMemo(() => {
-    if (!user) return [];
+  async function deleteTask(taskId: string) {
+    const confirmed = window.confirm(
+      "Tem certeza que deseja excluir esta tarefa?"
+    );
 
-    if (user.role === "client" && user.client?.id) {
-      return tasks.filter((task) => task.client?.id === user.client?.id);
+    if (!confirmed) return;
+
+    try {
+      setDeletingTaskId(taskId);
+
+      const response = await fetch(`/api/tasks/${taskId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.message || "Erro ao excluir tarefa.");
+      }
+
+      await loadData();
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? error.message : "Erro ao excluir tarefa.");
+    } finally {
+      setDeletingTaskId(null);
     }
+  }
 
-    return tasks;
-  }, [tasks, user]);
+  function updateForm(field: keyof TaskForm, value: string) {
+    setForm((current) => {
+      if (field === "clientId") {
+        return {
+          ...current,
+          clientId: value,
+          contentId: "",
+        };
+      }
+
+      return {
+        ...current,
+        [field]: value,
+      };
+    });
+  }
 
   if (userLoading || !user) {
     return null;
@@ -151,24 +265,20 @@ export default function TasksPage() {
   return (
     <AppShell
       title="Tarefas"
-      subtitle="Kanban de tarefas por cliente."
+      subtitle="Kanban de tarefas por cliente e conteúdo vinculado."
     >
       {user.role !== "client" && (
         <form onSubmit={createTask} style={formStyle}>
           <input
             placeholder="Nova tarefa"
             value={form.title}
-            onChange={(e) =>
-              setForm({ ...form, title: e.target.value })
-            }
+            onChange={(event) => updateForm("title", event.target.value)}
             style={inputStyle}
           />
 
           <select
             value={form.clientId}
-            onChange={(e) =>
-              setForm({ ...form, clientId: e.target.value })
-            }
+            onChange={(event) => updateForm("clientId", event.target.value)}
             style={inputStyle}
           >
             <option value="">Selecione o cliente</option>
@@ -180,10 +290,27 @@ export default function TasksPage() {
           </select>
 
           <select
+            value={form.contentId}
+            onChange={(event) => updateForm("contentId", event.target.value)}
+            style={inputStyle}
+            disabled={!form.clientId}
+          >
+            <option value="">
+              {form.clientId
+                ? "Sem conteúdo vinculado"
+                : "Escolha um cliente primeiro"}
+            </option>
+
+            {availableContents.map((content) => (
+              <option key={content.id} value={content.id}>
+                {content.title} • {getContentStatusLabel(content.status)}
+              </option>
+            ))}
+          </select>
+
+          <select
             value={form.priority}
-            onChange={(e) =>
-              setForm({ ...form, priority: e.target.value })
-            }
+            onChange={(event) => updateForm("priority", event.target.value)}
             style={inputStyle}
           >
             <option value="low">Prioridade baixa</option>
@@ -194,35 +321,25 @@ export default function TasksPage() {
           <input
             placeholder="Responsável"
             value={form.assignee}
-            onChange={(e) =>
-              setForm({ ...form, assignee: e.target.value })
-            }
+            onChange={(event) => updateForm("assignee", event.target.value)}
             style={inputStyle}
           />
 
           <input
             type="date"
             value={form.dueDate}
-            onChange={(e) =>
-              setForm({ ...form, dueDate: e.target.value })
-            }
+            onChange={(event) => updateForm("dueDate", event.target.value)}
             style={inputStyle}
           />
 
           <input
             placeholder="Descrição"
             value={form.description}
-            onChange={(e) =>
-              setForm({ ...form, description: e.target.value })
-            }
+            onChange={(event) => updateForm("description", event.target.value)}
             style={{ ...inputStyle, gridColumn: "1 / -2" }}
           />
 
-          <button
-            type="submit"
-            disabled={submitting}
-            style={buttonStyle}
-          >
+          <button type="submit" disabled={submitting} style={buttonStyle}>
             {submitting ? "Criando..." : "Criar"}
           </button>
         </form>
@@ -232,12 +349,15 @@ export default function TasksPage() {
         <div style={loadingBoxStyle}>Carregando tarefas...</div>
       ) : (
         <div style={boardStyle}>
-          {columns.map((col) => (
-            <div key={col} style={columnStyle}>
-              <h3 style={columnTitleStyle}>{getColumnLabel(col)}</h3>
+          {columns.map((column) => (
+            <div key={column} style={columnStyle}>
+              <h3 style={columnTitleStyle}>{getColumnLabel(column)}</h3>
+
+              {visibleTasks.filter((task) => task.status === column).length ===
+                0 && <div style={emptyColumnStyle}>Nenhuma tarefa.</div>}
 
               {visibleTasks
-                .filter((task) => task.status === col)
+                .filter((task) => task.status === column)
                 .map((task) => (
                   <div key={task.id} style={cardStyle}>
                     <strong style={{ display: "block", marginBottom: 8 }}>
@@ -245,7 +365,11 @@ export default function TasksPage() {
                     </strong>
 
                     <div style={metaTextStyle}>
-                      Cliente: {task.client?.name}
+                      Cliente: {task.client?.name || "Sem cliente"}
+                    </div>
+
+                    <div style={metaTextStyle}>
+                      Conteúdo: {task.content?.title || "Sem vínculo"}
                     </div>
 
                     <div style={metaTextStyle}>
@@ -266,38 +390,47 @@ export default function TasksPage() {
 
                     {user.role !== "client" && (
                       <div style={actionsStyle}>
-                        {col !== "todo" && (
+                        {column !== "todo" && (
                           <button
                             type="button"
                             onClick={() => moveTask(task.id, "todo")}
                             disabled={movingTaskId === task.id}
                             style={smallButtonStyle}
                           >
-                            ← Todo
+                            ← TODO
                           </button>
                         )}
 
-                        {col !== "doing" && (
+                        {column !== "doing" && (
                           <button
                             type="button"
                             onClick={() => moveTask(task.id, "doing")}
                             disabled={movingTaskId === task.id}
                             style={smallButtonStyle}
                           >
-                            Doing
+                            DOING
                           </button>
                         )}
 
-                        {col !== "done" && (
+                        {column !== "done" && (
                           <button
                             type="button"
                             onClick={() => moveTask(task.id, "done")}
                             disabled={movingTaskId === task.id}
                             style={smallButtonStyle}
                           >
-                            Done →
+                            DONE →
                           </button>
                         )}
+
+                        <button
+                          type="button"
+                          onClick={() => deleteTask(task.id)}
+                          disabled={deletingTaskId === task.id}
+                          style={dangerButtonStyle}
+                        >
+                          {deletingTaskId === task.id ? "..." : "Excluir"}
+                        </button>
                       </div>
                     )}
                   </div>
@@ -311,9 +444,9 @@ export default function TasksPage() {
 }
 
 function getColumnLabel(status: string) {
-  if (status === "todo") return "TODO";
-  if (status === "doing") return "DOING";
-  if (status === "done") return "DONE";
+  if (status === "todo") return "A fazer";
+  if (status === "doing") return "Em andamento";
+  if (status === "done") return "Concluídas";
   return status.toUpperCase();
 }
 
@@ -321,6 +454,16 @@ function getPriorityLabel(priority?: string | null) {
   if (priority === "low") return "Baixa";
   if (priority === "high") return "Alta";
   return "Média";
+}
+
+function getContentStatusLabel(status: string) {
+  if (status === "draft") return "Rascunho";
+  if (status === "in_review") return "Em revisão";
+  if (status === "waiting_client") return "Aguardando cliente";
+  if (status === "approved") return "Aprovado";
+  if (status === "published") return "Publicado";
+  if (status === "changes_requested") return "Ajustes solicitados";
+  return status;
 }
 
 function formatDate(date?: string | null) {
@@ -337,7 +480,7 @@ function formatDate(date?: string | null) {
 
 const formStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
   gap: 10,
   marginBottom: 24,
 };
@@ -348,6 +491,8 @@ const inputStyle: React.CSSProperties = {
   border: "1px solid #333",
   background: "#1a1a1a",
   color: "#fff",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 const buttonStyle: React.CSSProperties = {
@@ -370,7 +515,7 @@ const loadingBoxStyle: React.CSSProperties = {
 
 const boardStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(3, 1fr)",
+  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
   gap: 16,
 };
 
@@ -378,13 +523,21 @@ const columnStyle: React.CSSProperties = {
   background: "#111",
   padding: 12,
   borderRadius: 10,
-  minHeight: 500,
+  minHeight: 360,
   border: "1px solid #2a2a2a",
 };
 
 const columnTitleStyle: React.CSSProperties = {
   marginTop: 0,
   marginBottom: 12,
+};
+
+const emptyColumnStyle: React.CSSProperties = {
+  padding: 12,
+  borderRadius: 8,
+  background: "#1a1a1a",
+  color: "#777",
+  border: "1px dashed #333",
 };
 
 const cardStyle: React.CSSProperties = {
@@ -422,4 +575,14 @@ const smallButtonStyle: React.CSSProperties = {
   background: "#222",
   color: "#fff",
   cursor: "pointer",
+};
+
+const dangerButtonStyle: React.CSSProperties = {
+  padding: "8px 10px",
+  borderRadius: 8,
+  border: "none",
+  background: "#c0392b",
+  color: "#fff",
+  cursor: "pointer",
+  fontWeight: "bold",
 };
