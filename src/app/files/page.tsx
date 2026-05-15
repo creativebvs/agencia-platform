@@ -219,7 +219,7 @@ export default function FilesPage() {
               <div key={item.id} style={cardStyle}>
                 {isImage && (
                   <a
-                    href={viewUrl}
+                    href={`/api/files/${item.id}/view`}
                     target="_blank"
                     rel="noreferrer"
                     style={previewLinkStyle}
