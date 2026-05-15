@@ -1,23 +1,30 @@
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/db/prisma";
 import { requireUser } from "@/lib/auth-server";
 
-// ======================
-// GET - buscar conteúdo
-// ======================
+const allowedStatuses = [
+  "draft",
+  "in_review",
+  "waiting_client",
+  "approved",
+  "published",
+  "changes_requested",
+];
+
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    await requireUser();
-
-    const id = params.id;
+    const user = await requireUser();
 
     const content = await prisma.content.findUnique({
-      where: { id },
+      where: {
+        id: params.id,
+      },
       include: {
         client: true,
         files: true,
@@ -31,8 +38,26 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(content);
+    if (user.role === "client") {
+      if (!user.clientId || content.clientId !== user.clientId) {
+        return NextResponse.json(
+          { message: "Sem permissão para este conteúdo." },
+          { status: 403 }
+        );
+      }
+    }
+
+    return NextResponse.json(content, { status: 200 });
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json(
+        { message: "Não autenticado." },
+        { status: 401 }
+      );
+    }
+
+    console.error("Erro ao buscar conteúdo:", error);
+
     return NextResponse.json(
       { message: "Erro ao buscar conteúdo." },
       { status: 500 }
@@ -40,9 +65,6 @@ export async function GET(
   }
 }
 
-// ======================
-// PUT - atualizar conteúdo
-// ======================
 export async function PUT(
   request: Request,
   { params }: { params: { id: string } }
@@ -50,14 +72,18 @@ export async function PUT(
   try {
     const user = await requireUser();
 
-    const id = params.id;
     const body = await request.json();
 
-    const existing = await prisma.content.findUnique({
-      where: { id },
+    const existingContent = await prisma.content.findUnique({
+      where: {
+        id: params.id,
+      },
+      include: {
+        client: true,
+      },
     });
 
-    if (!existing) {
+    if (!existingContent) {
       return NextResponse.json(
         { message: "Conteúdo não encontrado." },
         { status: 404 }
@@ -65,41 +91,126 @@ export async function PUT(
     }
 
     if (user.role === "client") {
-      const allowedStatuses = ["approved", "changes_requested"];
-
-      if (!allowedStatuses.includes(body.status)) {
+      if (!user.clientId || existingContent.clientId !== user.clientId) {
         return NextResponse.json(
-          { message: "Sem permissão." },
+          { message: "Sem permissão para este conteúdo." },
           { status: 403 }
         );
       }
 
-      const updated = await prisma.content.update({
-        where: { id },
+      const status =
+        typeof body.status === "string" ? body.status.trim() : "";
+
+      if (!["approved", "changes_requested"].includes(status)) {
+        return NextResponse.json(
+          { message: "Cliente só pode aprovar ou pedir ajustes." },
+          { status: 403 }
+        );
+      }
+
+      const approvalNote =
+        typeof body.approvalNote === "string"
+          ? body.approvalNote.trim()
+          : "";
+
+      const updatedByClient = await prisma.content.update({
+        where: {
+          id: params.id,
+        },
         data: {
-          status: body.status,
-          feedback: body.approvalNote || null, // 👈 CORRIGIDO (não existe approvalNote no schema)
+          status,
+          approvalNote: approvalNote || null,
+        },
+        include: {
+          client: true,
+          files: true,
         },
       });
 
-      return NextResponse.json(updated);
+      return NextResponse.json(updatedByClient, { status: 200 });
     }
 
-    const updated = await prisma.content.update({
-      where: { id },
-      data: {
-        title: body.title,
-        type: body.type,
-        feedback: body.description || null, // 👈 adaptado pro schema real
-        status: body.status,
-        scheduledDate: body.scheduledDate
-          ? new Date(body.scheduledDate)
-          : null,
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    const type = typeof body.type === "string" ? body.type.trim() : "";
+    const caption =
+      typeof body.caption === "string" ? body.caption.trim() : "";
+    const description =
+      typeof body.description === "string" ? body.description.trim() : "";
+    const status =
+      typeof body.status === "string" && body.status.trim()
+        ? body.status.trim()
+        : existingContent.status;
+    const clientId =
+      typeof body.clientId === "string" && body.clientId.trim()
+        ? body.clientId.trim()
+        : existingContent.clientId;
+    const approvalNote =
+      typeof body.approvalNote === "string"
+        ? body.approvalNote.trim()
+        : existingContent.approvalNote || "";
+    const scheduledDate =
+      typeof body.scheduledDate === "string" && body.scheduledDate
+        ? new Date(body.scheduledDate)
+        : null;
+
+    if (!title || !type || !clientId) {
+      return NextResponse.json(
+        { message: "Título, tipo e cliente são obrigatórios." },
+        { status: 400 }
+      );
+    }
+
+    if (!allowedStatuses.includes(status)) {
+      return NextResponse.json(
+        { message: "Status inválido." },
+        { status: 400 }
+      );
+    }
+
+    const client = await prisma.client.findUnique({
+      where: {
+        id: clientId,
       },
     });
 
-    return NextResponse.json(updated);
+    if (!client) {
+      return NextResponse.json(
+        { message: "Cliente não encontrado." },
+        { status: 404 }
+      );
+    }
+
+    const content = await prisma.content.update({
+      where: {
+        id: params.id,
+      },
+      data: {
+        title,
+        type,
+        caption: caption || null,
+        description: description || null,
+        status,
+        scheduledDate,
+        approvalNote: approvalNote || null,
+        clientId,
+      },
+      include: {
+        client: true,
+        files: true,
+      },
+    });
+
+    return NextResponse.json(content, { status: 200 });
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json(
+        { message: "Não autenticado." },
+        { status: 401 }
+      );
+    }
+
+    console.error("Erro ao atualizar conteúdo:", error);
+
     return NextResponse.json(
       { message: "Erro ao atualizar conteúdo." },
       { status: 500 }
@@ -107,9 +218,6 @@ export async function PUT(
   }
 }
 
-// ======================
-// DELETE - excluir conteúdo
-// ======================
 export async function DELETE(
   request: Request,
   { params }: { params: { id: string } }
@@ -124,10 +232,10 @@ export async function DELETE(
       );
     }
 
-    const id = params.id;
-
     await prisma.content.delete({
-      where: { id },
+      where: {
+        id: params.id,
+      },
     });
 
     return NextResponse.json(
@@ -135,6 +243,15 @@ export async function DELETE(
       { status: 200 }
     );
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json(
+        { message: "Não autenticado." },
+        { status: 401 }
+      );
+    }
+
+    console.error("Erro ao excluir conteúdo:", error);
+
     return NextResponse.json(
       { message: "Erro ao excluir conteúdo." },
       { status: 500 }
