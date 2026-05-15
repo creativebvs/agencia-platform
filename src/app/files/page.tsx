@@ -127,6 +127,10 @@ export default function FilesPage() {
 
       setFile(null);
       setContentId("");
+
+      const input = document.getElementById("file-input") as HTMLInputElement;
+      if (input) input.value = "";
+
       await load();
     } catch (error) {
       console.error("Erro ao enviar arquivo:", error);
@@ -189,6 +193,7 @@ export default function FilesPage() {
           </select>
 
           <input
+            id="file-input"
             type="file"
             onChange={(event) => setFile(event.target.files?.[0] || null)}
             style={inputStyle}
@@ -206,45 +211,93 @@ export default function FilesPage() {
         <div style={emptyBoxStyle}>Nenhum arquivo encontrado.</div>
       ) : (
         <div style={listStyle}>
-          {visibleFiles.map((item) => (
-            <div key={item.id} style={cardStyle}>
-              <strong>{item.name}</strong>
+          {visibleFiles.map((item) => {
+            const viewUrl = `/api/files/${item.id}/view`;
+            const isImage = isImageFile(item.name);
 
-              <div style={metaStyle}>
-                Conteúdo: {item.content?.title || "Sem conteúdo"}
-              </div>
-
-              <div style={metaStyle}>
-                Cliente: {item.content?.client?.name || "Sem cliente"}
-              </div>
-
-              <div style={actionsStyle}>
-                <a
-                  href={item.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={linkStyle}
-                >
-                  Abrir
-                </a>
-
-                {user.role !== "client" && (
-                  <button
-                    type="button"
-                    onClick={() => deleteFile(item.id)}
-                    disabled={deletingId === item.id}
-                    style={dangerButtonStyle}
+            return (
+              <div key={item.id} style={cardStyle}>
+                {isImage && (
+                  <a
+                    href={viewUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={previewLinkStyle}
                   >
-                    {deletingId === item.id ? "Excluindo..." : "Excluir"}
-                  </button>
+                    <img
+                      src={viewUrl}
+                      alt={item.name}
+                      style={previewImageStyle}
+                    />
+                  </a>
                 )}
+
+                <strong>{item.name}</strong>
+
+                <div style={metaStyle}>
+                  Conteúdo: {item.content?.title || "Sem conteúdo"}
+                </div>
+
+                <div style={metaStyle}>
+                  Cliente: {item.content?.client?.name || "Sem cliente"}
+                </div>
+
+                <div style={metaStyle}>
+                  Enviado em: {formatDate(item.createdAt)}
+                </div>
+
+                <div style={actionsStyle}>
+                  <a
+                    href={viewUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={linkStyle}
+                  >
+                    {isImage ? "Abrir imagem" : "Abrir arquivo"}
+                  </a>
+
+                  {user.role !== "client" && (
+                    <button
+                      type="button"
+                      onClick={() => deleteFile(item.id)}
+                      disabled={deletingId === item.id}
+                      style={dangerButtonStyle}
+                    >
+                      {deletingId === item.id ? "Excluindo..." : "Excluir"}
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </AppShell>
   );
+}
+
+function isImageFile(fileName: string) {
+  const lower = fileName.toLowerCase();
+
+  return (
+    lower.endsWith(".jpg") ||
+    lower.endsWith(".jpeg") ||
+    lower.endsWith(".png") ||
+    lower.endsWith(".webp") ||
+    lower.endsWith(".gif")
+  );
+}
+
+function formatDate(date?: string) {
+  if (!date) return "Sem data";
+
+  const parsed = new Date(date);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "Sem data";
+  }
+
+  return parsed.toLocaleDateString("pt-BR");
 }
 
 const formStyle: React.CSSProperties = {
@@ -283,6 +336,7 @@ const emptyBoxStyle: React.CSSProperties = {
 
 const listStyle: React.CSSProperties = {
   display: "grid",
+  gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
   gap: 12,
 };
 
@@ -291,6 +345,20 @@ const cardStyle: React.CSSProperties = {
   padding: 14,
   borderRadius: 10,
   border: "1px solid #2a2a2a",
+};
+
+const previewLinkStyle: React.CSSProperties = {
+  display: "block",
+  marginBottom: 12,
+};
+
+const previewImageStyle: React.CSSProperties = {
+  width: "100%",
+  height: 180,
+  objectFit: "cover",
+  borderRadius: 8,
+  border: "1px solid #333",
+  background: "#0b0b0b",
 };
 
 const metaStyle: React.CSSProperties = {

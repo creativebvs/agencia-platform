@@ -687,7 +687,7 @@ export default function ContentsPage() {
                             {content.files.map((file) => (
                               <div key={file.id} style={fileItemStyle}>
                                 <a
-                                  href={file.url}
+                                  href={`/api/files/${file.id}/view`}
                                   target="_blank"
                                   rel="noreferrer"
                                   style={fileLinkStyle}
