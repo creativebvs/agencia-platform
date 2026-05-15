@@ -1,8 +1,13 @@
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/db/prisma";
 import { requireRole, requireUser } from "@/lib/auth-server";
+
+function getString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
 
 export async function GET() {
   try {
@@ -55,7 +60,12 @@ export async function POST(req: Request) {
 
     const body = await req.json();
 
-    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const name = getString(body.name);
+    const officialContact = getString(body.officialContact);
+    const phone = getString(body.phone);
+    const instagram = getString(body.instagram);
+    const address = getString(body.address);
+    const notes = getString(body.notes);
 
     if (!name) {
       return NextResponse.json(
@@ -67,6 +77,11 @@ export async function POST(req: Request) {
     const client = await prisma.client.create({
       data: {
         name,
+        officialContact: officialContact || null,
+        phone: phone || null,
+        instagram: instagram || null,
+        address: address || null,
+        notes: notes || null,
       },
     });
 

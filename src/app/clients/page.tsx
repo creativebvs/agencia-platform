@@ -7,29 +7,70 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 type Client = {
   id: string;
   name: string;
+  officialContact?: string | null;
+  phone?: string | null;
+  instagram?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type ClientForm = {
+  name: string;
+  officialContact: string;
+  phone: string;
+  instagram: string;
+  address: string;
+  notes: string;
+};
+
+const initialForm: ClientForm = {
+  name: "",
+  officialContact: "",
+  phone: "",
+  instagram: "",
+  address: "",
+  notes: "",
 };
 
 export default function ClientsPage() {
-  const { user, loading: userLoading } = useCurrentUser({ redirectToLogin: true });
+  const { user, loading: userLoading } = useCurrentUser({
+    redirectToLogin: true,
+  });
 
   const [clients, setClients] = useState<Client[]>([]);
-  const [name, setName] = useState("");
+  const [form, setForm] = useState<ClientForm>(initialForm);
   const [loading, setLoading] = useState(true);
 
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState("");
+  const [editingForm, setEditingForm] = useState<ClientForm>(initialForm);
+
   const [savingId, setSavingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   async function loadClients() {
     try {
-      const res = await fetch("/api/clients", { cache: "no-store" });
+      setLoading(true);
+
+      const res = await fetch("/api/clients", {
+        credentials: "include",
+        cache: "no-store",
+      });
+
       const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.message || "Erro ao carregar clientes.");
+      }
+
       setClients(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Erro ao carregar clientes:", error);
-      alert("Erro ao carregar clientes.");
+      alert(
+        error instanceof Error ? error.message : "Erro ao carregar clientes."
+      );
     } finally {
       setLoading(false);
     }
@@ -51,10 +92,10 @@ export default function ClientsPage() {
     return clients;
   }, [clients, user]);
 
-  async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function handleCreate(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
-    if (!name.trim()) {
+    if (!form.name.trim()) {
       alert("Digite o nome do cliente.");
       return;
     }
@@ -67,7 +108,8 @@ export default function ClientsPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ name }),
+        credentials: "include",
+        body: JSON.stringify(form),
       });
 
       const data = await response.json();
@@ -76,7 +118,7 @@ export default function ClientsPage() {
         throw new Error(data?.message || "Erro ao criar cliente.");
       }
 
-      setName("");
+      setForm(initialForm);
       await loadClients();
     } catch (error) {
       console.error(error);
@@ -88,16 +130,23 @@ export default function ClientsPage() {
 
   function startEdit(client: Client) {
     setEditingId(client.id);
-    setEditingName(client.name);
+    setEditingForm({
+      name: client.name || "",
+      officialContact: client.officialContact || "",
+      phone: client.phone || "",
+      instagram: client.instagram || "",
+      address: client.address || "",
+      notes: client.notes || "",
+    });
   }
 
   function cancelEdit() {
     setEditingId(null);
-    setEditingName("");
+    setEditingForm(initialForm);
   }
 
   async function handleSave(clientId: string) {
-    if (!editingName.trim()) {
+    if (!editingForm.name.trim()) {
       alert("Digite o nome do cliente.");
       return;
     }
@@ -110,7 +159,8 @@ export default function ClientsPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ name: editingName }),
+        credentials: "include",
+        body: JSON.stringify(editingForm),
       });
 
       const data = await response.json();
@@ -131,18 +181,17 @@ export default function ClientsPage() {
 
   async function handleDelete(clientId: string) {
     const confirmed = window.confirm(
-      "Tem certeza que deseja excluir este cliente?"
+      "Tem certeza que deseja excluir este cliente? Conteúdos, tarefas e relatórios relacionados podem ser afetados."
     );
 
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
     try {
       setDeletingId(clientId);
 
       const response = await fetch(`/api/clients/${clientId}`, {
         method: "DELETE",
+        credentials: "include",
       });
 
       const data = await response.json();
@@ -164,6 +213,20 @@ export default function ClientsPage() {
     }
   }
 
+  function updateForm(field: keyof ClientForm, value: string) {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  function updateEditingForm(field: keyof ClientForm, value: string) {
+    setEditingForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
   if (userLoading || !user) {
     return null;
   }
@@ -171,27 +234,8 @@ export default function ClientsPage() {
   return (
     <AppShell
       title="Clientes"
-      subtitle="Cadastro, edição e exclusão de clientes."
+      subtitle="Cadastro, dados de contato e informações comerciais dos clientes."
     >
-      <section style={sectionStyle}>
-        <h2 style={sectionTitleStyle}>Usuário atual</h2>
-
-        <div style={debugBoxStyle}>
-          <div>
-            <strong>Nome:</strong> {user.name}
-          </div>
-          <div>
-            <strong>Email:</strong> {user.email}
-          </div>
-          <div>
-            <strong>Role:</strong> {user.role}
-          </div>
-          <div>
-            <strong>É admin?</strong> {user.role === "admin" ? "SIM" : "NÃO"}
-          </div>
-        </div>
-      </section>
-
       {user.role === "admin" && (
         <section style={sectionStyle}>
           <h2 style={sectionTitleStyle}>Novo cliente</h2>
@@ -199,14 +243,55 @@ export default function ClientsPage() {
           <form onSubmit={handleCreate} style={formStyle}>
             <input
               placeholder="Nome do cliente"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              value={form.name}
+              onChange={(event) => updateForm("name", event.target.value)}
               style={inputStyle}
             />
 
-            <button type="submit" disabled={creating} style={buttonStyle}>
-              {creating ? "Criando..." : "Criar"}
-            </button>
+            <input
+              placeholder="Contato oficial"
+              value={form.officialContact}
+              onChange={(event) =>
+                updateForm("officialContact", event.target.value)
+              }
+              style={inputStyle}
+            />
+
+            <input
+              placeholder="WhatsApp / telefone"
+              value={form.phone}
+              onChange={(event) => updateForm("phone", event.target.value)}
+              style={inputStyle}
+            />
+
+            <input
+              placeholder="@ do Instagram"
+              value={form.instagram}
+              onChange={(event) =>
+                updateForm("instagram", event.target.value)
+              }
+              style={inputStyle}
+            />
+
+            <input
+              placeholder="Endereço"
+              value={form.address}
+              onChange={(event) => updateForm("address", event.target.value)}
+              style={{ ...inputStyle, gridColumn: "1 / -1" }}
+            />
+
+            <textarea
+              placeholder="Observações sobre o cliente"
+              value={form.notes}
+              onChange={(event) => updateForm("notes", event.target.value)}
+              style={textareaStyle}
+            />
+
+            <div style={formActionsStyle}>
+              <button type="submit" disabled={creating} style={buttonStyle}>
+                {creating ? "Criando..." : "Criar cliente"}
+              </button>
+            </div>
           </form>
         </section>
       )}
@@ -229,11 +314,64 @@ export default function ClientsPage() {
                 <div key={client.id} style={cardStyle}>
                   {isEditing ? (
                     <>
-                      <input
-                        value={editingName}
-                        onChange={(e) => setEditingName(e.target.value)}
-                        style={inputStyle}
-                      />
+                      <div style={editGridStyle}>
+                        <input
+                          placeholder="Nome do cliente"
+                          value={editingForm.name}
+                          onChange={(event) =>
+                            updateEditingForm("name", event.target.value)
+                          }
+                          style={inputStyle}
+                        />
+
+                        <input
+                          placeholder="Contato oficial"
+                          value={editingForm.officialContact}
+                          onChange={(event) =>
+                            updateEditingForm(
+                              "officialContact",
+                              event.target.value
+                            )
+                          }
+                          style={inputStyle}
+                        />
+
+                        <input
+                          placeholder="WhatsApp / telefone"
+                          value={editingForm.phone}
+                          onChange={(event) =>
+                            updateEditingForm("phone", event.target.value)
+                          }
+                          style={inputStyle}
+                        />
+
+                        <input
+                          placeholder="@ do Instagram"
+                          value={editingForm.instagram}
+                          onChange={(event) =>
+                            updateEditingForm("instagram", event.target.value)
+                          }
+                          style={inputStyle}
+                        />
+
+                        <input
+                          placeholder="Endereço"
+                          value={editingForm.address}
+                          onChange={(event) =>
+                            updateEditingForm("address", event.target.value)
+                          }
+                          style={{ ...inputStyle, gridColumn: "1 / -1" }}
+                        />
+
+                        <textarea
+                          placeholder="Observações"
+                          value={editingForm.notes}
+                          onChange={(event) =>
+                            updateEditingForm("notes", event.target.value)
+                          }
+                          style={textareaStyle}
+                        />
+                      </div>
 
                       <div style={actionsStyle}>
                         <button
@@ -257,7 +395,39 @@ export default function ClientsPage() {
                     </>
                   ) : (
                     <>
-                      <div style={clientNameStyle}>{client.name}</div>
+                      <div style={cardHeaderStyle}>
+                        <div>
+                          <div style={clientNameStyle}>{client.name}</div>
+
+                          <div style={metaStyle}>
+                            Contato:{" "}
+                            {client.officialContact?.trim() ||
+                              "Não informado"}
+                          </div>
+
+                          <div style={metaStyle}>
+                            WhatsApp/telefone:{" "}
+                            {client.phone?.trim() || "Não informado"}
+                          </div>
+
+                          <div style={metaStyle}>
+                            Instagram:{" "}
+                            {client.instagram?.trim() || "Não informado"}
+                          </div>
+
+                          <div style={metaStyle}>
+                            Endereço: {client.address?.trim() || "Não informado"}
+                          </div>
+                        </div>
+                      </div>
+
+                      {client.notes?.trim() ? (
+                        <div style={notesBoxStyle}>{client.notes}</div>
+                      ) : (
+                        <div style={notesBoxStyle}>
+                          Nenhuma observação cadastrada.
+                        </div>
+                      )}
 
                       {user.role === "admin" && (
                         <div style={actionsStyle}>
@@ -305,18 +475,16 @@ const sectionTitleStyle: React.CSSProperties = {
   fontSize: 22,
 };
 
-const debugBoxStyle: React.CSSProperties = {
-  background: "#1a1a1a",
-  border: "1px solid #2a2a2a",
-  borderRadius: 10,
-  padding: 14,
-  lineHeight: 1.8,
+const formStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 12,
 };
 
-const formStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 10,
-  flexWrap: "wrap",
+const editGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 12,
 };
 
 const inputStyle: React.CSSProperties = {
@@ -325,7 +493,21 @@ const inputStyle: React.CSSProperties = {
   border: "1px solid #333",
   background: "#1a1a1a",
   color: "#fff",
-  minWidth: 260,
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+const textareaStyle: React.CSSProperties = {
+  ...inputStyle,
+  gridColumn: "1 / -1",
+  minHeight: 90,
+  resize: "vertical",
+};
+
+const formActionsStyle: React.CSSProperties = {
+  gridColumn: "1 / -1",
+  display: "flex",
+  justifyContent: "flex-end",
 };
 
 const buttonStyle: React.CSSProperties = {
@@ -368,19 +550,43 @@ const emptyBoxStyle: React.CSSProperties = {
 
 const listStyle: React.CSSProperties = {
   display: "grid",
-  gap: 10,
+  gap: 12,
 };
 
 const cardStyle: React.CSSProperties = {
   background: "#1a1a1a",
-  padding: 14,
+  padding: 16,
   borderRadius: 10,
   border: "1px solid #2a2a2a",
 };
 
+const cardHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  flexWrap: "wrap",
+};
+
 const clientNameStyle: React.CSSProperties = {
-  fontSize: 16,
+  fontSize: 18,
   fontWeight: "bold",
+  marginBottom: 10,
+};
+
+const metaStyle: React.CSSProperties = {
+  color: "#bdbdbd",
+  fontSize: 13,
+  marginBottom: 6,
+};
+
+const notesBoxStyle: React.CSSProperties = {
+  marginTop: 12,
+  padding: 12,
+  borderRadius: 8,
+  background: "#111",
+  border: "1px solid #2a2a2a",
+  color: "#ddd",
+  lineHeight: 1.5,
 };
 
 const actionsStyle: React.CSSProperties = {

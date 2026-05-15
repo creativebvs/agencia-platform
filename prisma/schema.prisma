@@ -27,6 +27,12 @@ model Client {
   id        String     @id @default(cuid())
   name      String
 
+  officialContact String?
+  phone           String?
+  instagram       String?
+  address         String?
+  notes           String?
+
   users     User[]
   contents  Content[]
   tasks     Task[]

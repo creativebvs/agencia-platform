@@ -1,23 +1,30 @@
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/db/prisma";
 import { requireUser } from "@/lib/auth-server";
 
-// ======================
-// GET
-// ======================
-export async function GET(
-  request: Request,
-  context: any
-) {
-  try {
-    await requireUser();
+type Context = {
+  params: Promise<{
+    id: string;
+  }>;
+};
 
-    const id = context.params.id;
+function getString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+export async function GET(request: Request, context: Context) {
+  try {
+    const user = await requireUser();
+
+    const { id } = await context.params;
 
     const client = await prisma.client.findUnique({
-      where: { id },
+      where: {
+        id,
+      },
     });
 
     if (!client) {
@@ -27,8 +34,26 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(client);
+    if (user.role === "client") {
+      if (!user.clientId || user.clientId !== client.id) {
+        return NextResponse.json(
+          { message: "Sem permissão para este cliente." },
+          { status: 403 }
+        );
+      }
+    }
+
+    return NextResponse.json(client, { status: 200 });
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json(
+        { message: "Não autenticado." },
+        { status: 401 }
+      );
+    }
+
+    console.error("Erro ao buscar cliente:", error);
+
     return NextResponse.json(
       { message: "Erro ao buscar cliente." },
       { status: 500 }
@@ -36,13 +61,7 @@ export async function GET(
   }
 }
 
-// ======================
-// PUT
-// ======================
-export async function PUT(
-  request: Request,
-  context: any
-) {
+export async function PUT(request: Request, context: Context) {
   try {
     const user = await requireUser();
 
@@ -53,11 +72,15 @@ export async function PUT(
       );
     }
 
-    const id = context.params.id;
+    const { id } = await context.params;
     const body = await request.json();
 
-    const name =
-      typeof body.name === "string" ? body.name.trim() : "";
+    const name = getString(body.name);
+    const officialContact = getString(body.officialContact);
+    const phone = getString(body.phone);
+    const instagram = getString(body.instagram);
+    const address = getString(body.address);
+    const notes = getString(body.notes);
 
     if (!name) {
       return NextResponse.json(
@@ -66,27 +89,57 @@ export async function PUT(
       );
     }
 
-    const client = await prisma.client.update({
-      where: { id },
-      data: { name },
+    const existingClient = await prisma.client.findUnique({
+      where: {
+        id,
+      },
     });
 
-    return NextResponse.json(client);
+    if (!existingClient) {
+      return NextResponse.json(
+        { message: "Cliente não encontrado." },
+        { status: 404 }
+      );
+    }
+
+    const client = await prisma.client.update({
+      where: {
+        id,
+      },
+      data: {
+        name,
+        officialContact: officialContact || null,
+        phone: phone || null,
+        instagram: instagram || null,
+        address: address || null,
+        notes: notes || null,
+      },
+    });
+
+    return NextResponse.json(client, { status: 200 });
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json(
+        { message: "Não autenticado." },
+        { status: 401 }
+      );
+    }
+
+    console.error("Erro ao atualizar cliente:", error);
+
     return NextResponse.json(
-      { message: "Erro ao atualizar cliente." },
+      {
+        message:
+          error instanceof Error
+            ? `Erro ao atualizar cliente: ${error.message}`
+            : "Erro ao atualizar cliente.",
+      },
       { status: 500 }
     );
   }
 }
 
-// ======================
-// DELETE
-// ======================
-export async function DELETE(
-  request: Request,
-  context: any
-) {
+export async function DELETE(request: Request, context: Context) {
   try {
     const user = await requireUser();
 
@@ -97,10 +150,28 @@ export async function DELETE(
       );
     }
 
-    const id = context.params.id;
+    const { id } = await context.params;
+
+    const usersLinked = await prisma.user.count({
+      where: {
+        clientId: id,
+      },
+    });
+
+    if (usersLinked > 0) {
+      return NextResponse.json(
+        {
+          message:
+            "Este cliente possui usuários vinculados. Remova ou edite os usuários antes de excluir o cliente.",
+        },
+        { status: 400 }
+      );
+    }
 
     await prisma.client.delete({
-      where: { id },
+      where: {
+        id,
+      },
     });
 
     return NextResponse.json(
@@ -108,8 +179,22 @@ export async function DELETE(
       { status: 200 }
     );
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json(
+        { message: "Não autenticado." },
+        { status: 401 }
+      );
+    }
+
+    console.error("Erro ao excluir cliente:", error);
+
     return NextResponse.json(
-      { message: "Erro ao excluir cliente." },
+      {
+        message:
+          error instanceof Error
+            ? `Erro ao excluir cliente: ${error.message}`
+            : "Erro ao excluir cliente.",
+      },
       { status: 500 }
     );
   }
