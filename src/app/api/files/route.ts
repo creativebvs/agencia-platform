@@ -103,7 +103,7 @@ export async function POST(req: Request) {
     const pathname = `contents/${contentId}/${Date.now()}-${safeFileName}`;
 
     const blob = await put(pathname, file, {
-      access: "public",
+      access: "private",
       addRandomSuffix: true,
     });
 
@@ -134,7 +134,12 @@ export async function POST(req: Request) {
     console.error("Erro ao enviar arquivo:", error);
 
     return NextResponse.json(
-      { message: "Erro ao enviar arquivo." },
+      {
+        message:
+          error instanceof Error
+            ? `Erro ao enviar arquivo: ${error.message}`
+            : "Erro ao enviar arquivo.",
+      },
       { status: 500 }
     );
   }
