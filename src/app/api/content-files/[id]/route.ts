@@ -15,7 +15,6 @@ type Context = {
 export async function GET(req: NextRequest, context: Context) {
   try {
     const user = await requireUser();
-
     const { id } = await context.params;
 
     const file = await prisma.file.findUnique({
@@ -68,6 +67,7 @@ export async function GET(req: NextRequest, context: Context) {
 export async function DELETE(req: NextRequest, context: Context) {
   try {
     const user = await requireUser();
+    const { id } = await context.params;
 
     if (user.role === "client") {
       return NextResponse.json(
@@ -75,8 +75,6 @@ export async function DELETE(req: NextRequest, context: Context) {
         { status: 403 }
       );
     }
-
-    const { id } = await context.params;
 
     const file = await prisma.file.findUnique({
       where: {
@@ -120,7 +118,12 @@ export async function DELETE(req: NextRequest, context: Context) {
     console.error("Erro ao excluir arquivo:", error);
 
     return NextResponse.json(
-      { message: "Erro ao excluir arquivo." },
+      {
+        message:
+          error instanceof Error
+            ? `Erro ao excluir arquivo: ${error.message}`
+            : "Erro ao excluir arquivo.",
+      },
       { status: 500 }
     );
   }

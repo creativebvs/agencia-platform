@@ -2,8 +2,15 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
+import { del } from "@vercel/blob";
 import { prisma } from "@/db/prisma";
 import { requireUser } from "@/lib/auth-server";
+
+type Context = {
+  params: Promise<{
+    id: string;
+  }>;
+};
 
 const allowedStatuses = [
   "draft",
@@ -14,16 +21,14 @@ const allowedStatuses = [
   "changes_requested",
 ];
 
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: Request, context: Context) {
   try {
     const user = await requireUser();
+    const { id } = await context.params;
 
     const content = await prisma.content.findUnique({
       where: {
-        id: params.id,
+        id,
       },
       include: {
         client: true,
@@ -65,18 +70,16 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(request: Request, context: Context) {
   try {
     const user = await requireUser();
+    const { id } = await context.params;
 
     const body = await request.json();
 
     const existingContent = await prisma.content.findUnique({
       where: {
-        id: params.id,
+        id,
       },
       include: {
         client: true,
@@ -115,7 +118,7 @@ export async function PUT(
 
       const updatedByClient = await prisma.content.update({
         where: {
-          id: params.id,
+          id,
         },
         data: {
           status,
@@ -132,22 +135,28 @@ export async function PUT(
 
     const title = typeof body.title === "string" ? body.title.trim() : "";
     const type = typeof body.type === "string" ? body.type.trim() : "";
+
     const caption =
       typeof body.caption === "string" ? body.caption.trim() : "";
+
     const description =
       typeof body.description === "string" ? body.description.trim() : "";
+
     const status =
       typeof body.status === "string" && body.status.trim()
         ? body.status.trim()
         : existingContent.status;
+
     const clientId =
       typeof body.clientId === "string" && body.clientId.trim()
         ? body.clientId.trim()
         : existingContent.clientId;
+
     const approvalNote =
       typeof body.approvalNote === "string"
         ? body.approvalNote.trim()
         : existingContent.approvalNote || "";
+
     const scheduledDate =
       typeof body.scheduledDate === "string" && body.scheduledDate
         ? new Date(body.scheduledDate)
@@ -182,7 +191,7 @@ export async function PUT(
 
     const content = await prisma.content.update({
       where: {
-        id: params.id,
+        id,
       },
       data: {
         title,
@@ -212,18 +221,21 @@ export async function PUT(
     console.error("Erro ao atualizar conteúdo:", error);
 
     return NextResponse.json(
-      { message: "Erro ao atualizar conteúdo." },
+      {
+        message:
+          error instanceof Error
+            ? `Erro ao atualizar conteúdo: ${error.message}`
+            : "Erro ao atualizar conteúdo.",
+      },
       { status: 500 }
     );
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: Request, context: Context) {
   try {
     const user = await requireUser();
+    const { id } = await context.params;
 
     if (user.role === "client") {
       return NextResponse.json(
@@ -232,9 +244,41 @@ export async function DELETE(
       );
     }
 
+    const content = await prisma.content.findUnique({
+      where: {
+        id,
+      },
+      include: {
+        files: true,
+      },
+    });
+
+    if (!content) {
+      return NextResponse.json(
+        { message: "Conteúdo não encontrado." },
+        { status: 404 }
+      );
+    }
+
+    for (const file of content.files) {
+      try {
+        if (file.url) {
+          await del(file.url);
+        }
+      } catch (blobError) {
+        console.error("Erro ao excluir arquivo do Blob:", file.id, blobError);
+      }
+    }
+
+    await prisma.file.deleteMany({
+      where: {
+        contentId: id,
+      },
+    });
+
     await prisma.content.delete({
       where: {
-        id: params.id,
+        id,
       },
     });
 
@@ -253,7 +297,12 @@ export async function DELETE(
     console.error("Erro ao excluir conteúdo:", error);
 
     return NextResponse.json(
-      { message: "Erro ao excluir conteúdo." },
+      {
+        message:
+          error instanceof Error
+            ? `Erro ao excluir conteúdo: ${error.message}`
+            : "Erro ao excluir conteúdo.",
+      },
       { status: 500 }
     );
   }
