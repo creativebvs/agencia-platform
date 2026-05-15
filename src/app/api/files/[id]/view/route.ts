@@ -6,29 +6,25 @@ import { get } from "@vercel/blob";
 import { prisma } from "@/db/prisma";
 import { requireUser } from "@/lib/auth-server";
 
-function getBlobPathnameFromUrl(url: string) {
-  try {
-    const parsed = new URL(url);
-    return parsed.pathname.replace(/^\/+/, "");
-  } catch {
-    return url.replace(/^\/+/, "");
-  }
-}
+type Context = {
+  params: Promise<{
+    id: string;
+  }>;
+};
 
 function encodeFileName(fileName: string) {
   return encodeURIComponent(fileName).replace(/['()]/g, escape);
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, context: Context) {
   try {
     const user = await requireUser();
 
+    const { id } = await context.params;
+
     const file = await prisma.file.findUnique({
       where: {
-        id: params.id,
+        id,
       },
       include: {
         content: {
@@ -41,7 +37,7 @@ export async function GET(
 
     if (!file) {
       return NextResponse.json(
-        { message: "Arquivo não encontrado." },
+        { message: "Arquivo não encontrado no banco." },
         { status: 404 }
       );
     }
@@ -55,9 +51,7 @@ export async function GET(
       }
     }
 
-    const pathname = getBlobPathnameFromUrl(file.url);
-
-    const result = await get(pathname, {
+    const result = await get(file.url, {
       access: "private",
       ifNoneMatch: request.headers.get("if-none-match") ?? undefined,
     });
@@ -75,6 +69,12 @@ export async function GET(
           ETag: result.blob.etag,
           "Cache-Control": "private, no-cache",
         },
+      });
+    }
+
+    if (!result.stream) {
+      return new NextResponse("Arquivo sem stream disponível.", {
+        status: 404,
       });
     }
 
@@ -104,7 +104,12 @@ export async function GET(
     console.error("Erro ao visualizar arquivo:", error);
 
     return NextResponse.json(
-      { message: "Erro ao visualizar arquivo." },
+      {
+        message:
+          error instanceof Error
+            ? `Erro ao visualizar arquivo: ${error.message}`
+            : "Erro ao visualizar arquivo.",
+      },
       { status: 500 }
     );
   }

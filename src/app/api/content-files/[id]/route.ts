@@ -6,16 +6,21 @@ import { del } from "@vercel/blob";
 import { prisma } from "@/db/prisma";
 import { requireUser } from "@/lib/auth-server";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+type Context = {
+  params: Promise<{
+    id: string;
+  }>;
+};
+
+export async function GET(req: NextRequest, context: Context) {
   try {
     const user = await requireUser();
 
+    const { id } = await context.params;
+
     const file = await prisma.file.findUnique({
       where: {
-        id: params.id,
+        id,
       },
       include: {
         content: {
@@ -60,10 +65,7 @@ export async function GET(
   }
 }
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(req: NextRequest, context: Context) {
   try {
     const user = await requireUser();
 
@@ -74,9 +76,11 @@ export async function DELETE(
       );
     }
 
+    const { id } = await context.params;
+
     const file = await prisma.file.findUnique({
       where: {
-        id: params.id,
+        id,
       },
     });
 
@@ -97,7 +101,7 @@ export async function DELETE(
 
     await prisma.file.delete({
       where: {
-        id: params.id,
+        id,
       },
     });
 
