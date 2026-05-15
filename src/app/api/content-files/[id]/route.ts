@@ -1,46 +1,104 @@
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
+import { del } from "@vercel/blob";
 import { prisma } from "@/db/prisma";
 import { requireUser } from "@/lib/auth-server";
 
-// ======================
-// GET
-// ======================
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    await requireUser();
+    const user = await requireUser();
 
-    const files = await prisma.file.findMany({
+    const file = await prisma.file.findUnique({
       where: {
-        contentId: params.id,
+        id: params.id,
+      },
+      include: {
+        content: {
+          include: {
+            client: true,
+          },
+        },
       },
     });
 
-    return NextResponse.json(files);
+    if (!file) {
+      return NextResponse.json(
+        { message: "Arquivo não encontrado." },
+        { status: 404 }
+      );
+    }
+
+    if (user.role === "client") {
+      if (!user.clientId || file.content.clientId !== user.clientId) {
+        return NextResponse.json(
+          { message: "Sem permissão para este arquivo." },
+          { status: 403 }
+        );
+      }
+    }
+
+    return NextResponse.json(file, { status: 200 });
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json(
+        { message: "Não autenticado." },
+        { status: 401 }
+      );
+    }
+
+    console.error("Erro ao buscar arquivo:", error);
+
     return NextResponse.json(
-      { message: "Erro ao buscar arquivos." },
+      { message: "Erro ao buscar arquivo." },
       { status: 500 }
     );
   }
 }
 
-// ======================
-// DELETE
-// ======================
 export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    await requireUser();
+    const user = await requireUser();
+
+    if (user.role === "client") {
+      return NextResponse.json(
+        { message: "Sem permissão para excluir arquivo." },
+        { status: 403 }
+      );
+    }
+
+    const file = await prisma.file.findUnique({
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!file) {
+      return NextResponse.json(
+        { message: "Arquivo não encontrado." },
+        { status: 404 }
+      );
+    }
+
+    try {
+      if (file.url) {
+        await del(file.url);
+      }
+    } catch (blobError) {
+      console.error("Erro ao excluir arquivo do Blob:", blobError);
+    }
 
     await prisma.file.delete({
-      where: { id: params.id },
+      where: {
+        id: params.id,
+      },
     });
 
     return NextResponse.json(
@@ -48,6 +106,15 @@ export async function DELETE(
       { status: 200 }
     );
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json(
+        { message: "Não autenticado." },
+        { status: 401 }
+      );
+    }
+
+    console.error("Erro ao excluir arquivo:", error);
+
     return NextResponse.json(
       { message: "Erro ao excluir arquivo." },
       { status: 500 }

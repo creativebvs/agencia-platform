@@ -1,39 +1,35 @@
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
+import { put } from "@vercel/blob";
 import { prisma } from "@/db/prisma";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
 import { requireUser } from "@/lib/auth-server";
+
+function sanitizeFileName(fileName: string) {
+  return fileName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w.\-]+/g, "-")
+    .replace(/-+/g, "-")
+    .toLowerCase();
+}
 
 export async function GET() {
   try {
     const user = await requireUser();
 
-    if (user.role === "client") {
-      if (!user.clientId) {
-        return NextResponse.json([], { status: 200 });
-      }
+    const where =
+      user.role === "client"
+        ? {
+            content: {
+              clientId: user.clientId || "",
+            },
+          }
+        : {};
 
-      const files = await prisma.file.findMany({
-        where: {
-          content: {
-            clientId: user.clientId,
-          },
-        },
-        include: {
-          content: true,
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      });
-
-      return NextResponse.json(files, { status: 200 });
-    }
-
-    // ADMIN / CREATIVE vê todos
     const files = await prisma.file.findMany({
+      where,
       include: {
         content: {
           include: {
@@ -87,25 +83,42 @@ export async function POST(req: Request) {
       );
     }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    const content = await prisma.content.findUnique({
+      where: {
+        id: contentId,
+      },
+      include: {
+        client: true,
+      },
+    });
 
-    const uploadsDir = path.join(process.cwd(), "public", "uploads");
-    await mkdir(uploadsDir, { recursive: true });
+    if (!content) {
+      return NextResponse.json(
+        { message: "Conteúdo não encontrado." },
+        { status: 404 }
+      );
+    }
 
-    const safeFileName = `${Date.now()}-${file.name.replace(/\s+/g, "-")}`;
-    const filePath = path.join(uploadsDir, safeFileName);
+    const safeFileName = sanitizeFileName(file.name);
+    const pathname = `contents/${contentId}/${Date.now()}-${safeFileName}`;
 
-    await writeFile(filePath, buffer);
+    const blob = await put(pathname, file, {
+      access: "public",
+      addRandomSuffix: true,
+    });
 
     const savedFile = await prisma.file.create({
       data: {
         name: file.name,
-        url: `/uploads/${safeFileName}`,
+        url: blob.url,
         contentId,
       },
       include: {
-        content: true,
+        content: {
+          include: {
+            client: true,
+          },
+        },
       },
     });
 
